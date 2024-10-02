@@ -15,7 +15,7 @@ pub type ExtractedFace {
   )
 }
 
-pub fn faces_from_image(
+pub fn from_image(
   image: ansel.Image,
   faces: List(fixed_bounding_box.FixedBoundingBox),
   quality: Int,
