@@ -11,7 +11,7 @@ pub type TargetSize {
 }
 
 pub type CompressionRequest {
-  CompressionRequest(
+  Image(
     image: ansel.Image,
     date: tempo.Date,
     is_favorite: Bool,
@@ -20,6 +20,7 @@ pub type CompressionRequest {
     user_metadata: String,
     faces: List(bounding_box.BoundingBox),
   )
+  Video
 }
 
 pub fn main() {
