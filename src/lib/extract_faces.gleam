@@ -1,25 +1,18 @@
 import ansel
 import ansel/fixed_bounding_box
 import ansel/image
+import compression_server as core
 import gleam/float
 import gleam/int
 import gleam/list
 import gleam/result
 import snag
 
-pub type ExtractedFace {
-  ExtractedFace(
-    face: BitArray,
-    quality: Int,
-    bounding_box: fixed_bounding_box.FixedBoundingBox,
-  )
-}
-
 pub fn from_image(
   image: ansel.Image,
   faces: List(fixed_bounding_box.FixedBoundingBox),
   quality: Int,
-) -> Result(List(ExtractedFace), snag.Snag) {
+) -> Result(List(core.ExtractedArea), snag.Snag) {
   let image_width = image.get_width(image)
   let image_height = image.get_height(image)
 
@@ -75,8 +68,8 @@ pub fn from_image(
 
     use face <- result.map(image.extract_area(from: image, at: expanded_face))
 
-    ExtractedFace(
-      face: image.to_bit_array(face, ansel.AVIF(quality: quality)),
+    core.ExtractedArea(
+      area: image.to_bit_array(face, ansel.AVIF(quality: quality)),
       bounding_box: expanded_face,
       quality: quality,
     )

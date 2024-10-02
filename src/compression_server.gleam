@@ -1,5 +1,5 @@
 import ansel
-import ansel/bounding_box
+import ansel/fixed_bounding_box
 import gleam/io
 import tempo
 
@@ -18,9 +18,17 @@ pub type CompressionRequest {
     target_size: TargetSize,
     original_file_path: String,
     user_metadata: String,
-    faces: List(bounding_box.BoundingBox),
+    faces: List(fixed_bounding_box.FixedBoundingBox),
   )
   Video
+}
+
+pub type ExtractedArea {
+  ExtractedArea(
+    area: BitArray,
+    quality: Int,
+    bounding_box: fixed_bounding_box.FixedBoundingBox,
+  )
 }
 
 pub fn main() {
