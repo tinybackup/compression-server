@@ -22,11 +22,11 @@ pub fn from_image(image: ansel.Image) {
   let smallest_dimension = int.min(width, height)
 
   let get_bounding_box = fn(center_x, center_y) {
-    fixed_bounding_box.LTWH(
+    fixed_bounding_box.LTRB(
       left: center_x - detail_crop_half_size,
       top: center_y - detail_crop_half_size,
-      width: center_x + detail_crop_half_size,
-      height: center_y + detail_crop_half_size,
+      right: center_x + detail_crop_half_size,
+      bottom: center_y + detail_crop_half_size,
     )
   }
 
