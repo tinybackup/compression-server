@@ -18,9 +18,9 @@ pub type ImageConfig {
   ImageConfig(
     baseline_size: Int,
     target_size: Int,
-    quality: Int,
-    focus_percent: Float,
+    write_baseline: fn(ansel.Image) -> BitArray,
     write_face: fn(ansel.Image) -> BitArray,
+    focus_percent: Float,
     write_focus_point: fn(ansel.Image) -> BitArray,
     write_detail: fn(ansel.Image) -> BitArray,
     compatability_mode: Bool,
@@ -41,16 +41,30 @@ pub fn get_image_config(
       ImageConfig(
         baseline_size: 1080,
         target_size: 600,
-        quality: 30,
-        focus_percent: 0.45,
-        write_face: fn(image) {
-          image.to_bit_array(image, ansel.AVIF(quality: 40))
+        write_baseline: fn(image) {
+          image.to_bit_array(
+            image,
+            ansel.Custom(".avif[Q=30,strip=true,effort=9]"),
+          )
         },
+        write_face: fn(image) {
+          image.to_bit_array(
+            image,
+            ansel.Custom(".avif[Q=40,strip=true,effort=9]"),
+          )
+        },
+        focus_percent: 0.45,
         write_focus_point: fn(image) {
-          image.to_bit_array(image, ansel.AVIF(quality: 30))
+          image.to_bit_array(
+            image,
+            ansel.Custom(".avif[Q=30,strip=true,effort=9]"),
+          )
         },
         write_detail: fn(image) {
-          image.to_bit_array(image, ansel.AVIF(quality: 50))
+          image.to_bit_array(
+            image,
+            ansel.Custom(".avif[Q=50,strip=true,effort=9]"),
+          )
         },
         compatability_mode: False,
       )
@@ -59,16 +73,30 @@ pub fn get_image_config(
       ImageConfig(
         baseline_size: 1080,
         target_size: 600,
-        quality: 30,
-        focus_percent: 0.45,
-        write_face: fn(image) {
-          image.to_bit_array(image, ansel.JPEG(quality: 40))
+        write_baseline: fn(image) {
+          image.to_bit_array(
+            image,
+            ansel.JPEG(quality: 30, keep_metadata: False),
+          )
         },
+        write_face: fn(image) {
+          image.to_bit_array(
+            image,
+            ansel.JPEG(quality: 40, keep_metadata: False),
+          )
+        },
+        focus_percent: 0.45,
         write_focus_point: fn(image) {
-          image.to_bit_array(image, ansel.JPEG(quality: 30))
+          image.to_bit_array(
+            image,
+            ansel.JPEG(quality: 30, keep_metadata: False),
+          )
         },
         write_detail: fn(image) {
-          image.to_bit_array(image, ansel.JPEG(quality: 50))
+          image.to_bit_array(
+            image,
+            ansel.JPEG(quality: 50, keep_metadata: False),
+          )
         },
         compatability_mode: True,
       )

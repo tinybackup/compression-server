@@ -61,3 +61,35 @@ pub fn for_image(
   |> bytes_builder.append_string(user_metadata)
   |> bytes_builder.to_bit_array
 }
+
+pub fn for_image_footer(
+  baseline_length: Int,
+  faces_length: List(Int),
+  focus_points_length: List(Int),
+  details_length: List(Int),
+  metadata_length: Int,
+) {
+  bytes_builder.from_string(core_types.bit_separator)
+  |> bytes_builder.append_string("b")
+  |> bytes_builder.append_string(baseline_length |> int.to_string)
+  |> bytes_builder.append_builder(
+    list.map(faces_length, fn(length) {
+      bytes_builder.from_string(length |> int.to_string)
+    })
+    |> bytes_builder.concat,
+  )
+  |> bytes_builder.append_builder(
+    list.map(focus_points_length, fn(length) {
+      bytes_builder.from_string(length |> int.to_string)
+    })
+    |> bytes_builder.concat,
+  )
+  |> bytes_builder.append_builder(
+    list.map(details_length, fn(length) {
+      bytes_builder.from_string(length |> int.to_string)
+    })
+    |> bytes_builder.concat,
+  )
+  |> bytes_builder.append_string(metadata_length |> int.to_string)
+  |> bytes_builder.to_bit_array
+}
