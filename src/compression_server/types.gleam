@@ -1,5 +1,6 @@
 import ansel
 import ansel/fixed_bounding_box
+import ansel/image
 
 pub const bit_separator = "tbdv1"
 
@@ -19,9 +20,9 @@ pub type ImageConfig {
     target_size: Int,
     quality: Int,
     focus_percent: Float,
-    face_quality: Int,
-    focus_point_quality: Int,
-    detail_quality: Int,
+    write_face: fn(ansel.Image) -> BitArray,
+    write_focus_point: fn(ansel.Image) -> BitArray,
+    write_detail: fn(ansel.Image) -> BitArray,
     compatability_mode: Bool,
   )
 }
@@ -42,9 +43,15 @@ pub fn get_image_config(
         target_size: 600,
         quality: 30,
         focus_percent: 0.45,
-        face_quality: 40,
-        focus_point_quality: 30,
-        detail_quality: 50,
+        write_face: fn(image) {
+          image.to_bit_array(image, ansel.AVIF(quality: 40))
+        },
+        write_focus_point: fn(image) {
+          image.to_bit_array(image, ansel.AVIF(quality: 30))
+        },
+        write_detail: fn(image) {
+          image.to_bit_array(image, ansel.AVIF(quality: 50))
+        },
         compatability_mode: False,
       )
 
@@ -54,9 +61,15 @@ pub fn get_image_config(
         target_size: 600,
         quality: 30,
         focus_percent: 0.45,
-        face_quality: 40,
-        focus_point_quality: 30,
-        detail_quality: 50,
+        write_face: fn(image) {
+          image.to_bit_array(image, ansel.JPEG(quality: 40))
+        },
+        write_focus_point: fn(image) {
+          image.to_bit_array(image, ansel.JPEG(quality: 30))
+        },
+        write_detail: fn(image) {
+          image.to_bit_array(image, ansel.JPEG(quality: 50))
+        },
         compatability_mode: True,
       )
 
@@ -91,8 +104,7 @@ pub type CompressionRequest {
 
 pub type ExtractedArea {
   ExtractedArea(
-    area: BitArray,
-    quality: Int,
+    area: ansel.Image,
     bounding_box: fixed_bounding_box.FixedBoundingBox,
   )
 }

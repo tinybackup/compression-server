@@ -14,7 +14,7 @@ import gleam/result
 /// crop will be 64x64 pixels.
 const detail_crop_half_size = 32
 
-pub fn from_image(image: ansel.Image, quality: Int) {
+pub fn from_image(image: ansel.Image) {
   let width = image.get_width(image)
   let height = image.get_height(image)
 
@@ -50,9 +50,8 @@ pub fn from_image(image: ansel.Image, quality: Int) {
     use crop <- result.map(image.extract_area(from: image, at: bounding_box))
 
     core_types.ExtractedArea(
-      area: image.to_bit_array(crop, ansel.AVIF(quality: quality)),
+      area: crop,
       bounding_box: bounding_box,
-      quality: quality,
     )
   })
   |> result.all

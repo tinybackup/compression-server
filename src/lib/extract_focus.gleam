@@ -10,7 +10,7 @@ import gleam/result
 /// Calculate the xywh of the focus crops to make an "oval" shape 
 /// out of two large rectangles (cropped into three so they don't overlap) 
 /// in the center of the image.
-pub fn from_image(image: ansel.Image, focus_percent: Float, quality: Int) {
+pub fn from_image(image: ansel.Image, focus_percent: Float) {
   // Like this for a vertical image:
   // ---------------
   // -----&@@@&-----
@@ -80,11 +80,7 @@ pub fn from_image(image: ansel.Image, focus_percent: Float, quality: Int) {
   list.map(focus_point_bounding_boxes, fn(bounding_box) {
     use crop <- result.map(image.extract_area(from: image, at: bounding_box))
 
-    core_types.ExtractedArea(
-      area: image.to_bit_array(crop, ansel.AVIF(quality: quality)),
-      bounding_box: bounding_box,
-      quality: quality,
-    )
+    core_types.ExtractedArea(area: crop, bounding_box: bounding_box)
   })
   |> result.all
 }

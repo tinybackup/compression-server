@@ -11,7 +11,6 @@ import snag
 pub fn from_image(
   image: ansel.Image,
   faces: List(fixed_bounding_box.FixedBoundingBox),
-  quality: Int,
 ) -> Result(List(core_types.ExtractedArea), snag.Snag) {
   let image_width = image.get_width(image)
   let image_height = image.get_height(image)
@@ -68,11 +67,7 @@ pub fn from_image(
 
     use face <- result.map(image.extract_area(from: image, at: expanded_face))
 
-    core_types.ExtractedArea(
-      area: image.to_bit_array(face, ansel.AVIF(quality: quality)),
-      bounding_box: expanded_face,
-      quality: quality,
-    )
+    core_types.ExtractedArea(area: face, bounding_box: expanded_face)
   })
   |> result.all
 }
