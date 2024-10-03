@@ -58,7 +58,9 @@ pub fn for_image(
     })
     |> bytes_builder.concat,
   )
-  |> bytes_builder.append_string(user_metadata)
+  |> bytes_builder.append_string("\"")
+  |> bytes_builder.append_string(user_metadata |> string.replace("\"", "'"))
+  |> bytes_builder.append_string("\"")
   |> bytes_builder.to_bit_array
 }
 
