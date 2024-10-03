@@ -5,7 +5,9 @@ import tempo
 pub type TargetSize {
   Original
   Medium
+  CompatableMedium
   Small
+  CompatableSmall
   Tiny
   CompatableTiny
 }
@@ -23,7 +25,15 @@ pub type ImageConfig {
   )
 }
 
-pub fn get_image_config(target_size: TargetSize) -> ImageConfig {
+pub fn get_image_config(
+  target_size: TargetSize,
+  is_favorite: Bool,
+) -> ImageConfig {
+  let target_size = case is_favorite {
+    True -> size_up(target_size)
+    False -> target_size
+  }
+
   case target_size {
     Tiny ->
       ImageConfig(
@@ -50,6 +60,18 @@ pub fn get_image_config(target_size: TargetSize) -> ImageConfig {
       )
 
     _ -> panic as "Config not implemented"
+  }
+}
+
+fn size_up(target_size: TargetSize) -> TargetSize {
+  case target_size {
+    Original -> Original
+    Medium -> Original
+    CompatableMedium -> Original
+    Small -> Medium
+    CompatableSmall -> CompatableMedium
+    Tiny -> Small
+    CompatableTiny -> CompatableSmall
   }
 }
 
