@@ -1,7 +1,7 @@
 import ansel
 import ansel/fixed_bounding_box
 import ansel/image
-import compression_server as core
+import compression_server/types as core_types
 import gleam/float
 import gleam/int
 import gleam/list
@@ -80,7 +80,7 @@ pub fn from_image(image: ansel.Image, focus_percent: Float, quality: Int) {
   list.map(focus_point_bounding_boxes, fn(bounding_box) {
     use crop <- result.map(image.extract_area(from: image, at: bounding_box))
 
-    core.ExtractedArea(
+    core_types.ExtractedArea(
       area: image.to_bit_array(crop, ansel.AVIF(quality: quality)),
       bounding_box: bounding_box,
       quality: quality,

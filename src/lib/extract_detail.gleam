@@ -1,10 +1,11 @@
 //// Extracts small squares of high quality from the four corners of the
 //// to preserve details that may not be in faces or the focus of the image.
 //// Things like the texture of a shirt or pattern in the background.
+
 import ansel
 import ansel/fixed_bounding_box
 import ansel/image
-import compression_server as core
+import compression_server/types as core_types
 import gleam/int
 import gleam/list
 import gleam/result
@@ -48,10 +49,11 @@ pub fn from_image(image: ansel.Image, quality: Int) {
   list.map(detail_bounding_boxes, fn(bounding_box) {
     use crop <- result.map(image.extract_area(from: image, at: bounding_box))
 
-    core.ExtractedArea(
+    core_types.ExtractedArea(
       area: image.to_bit_array(crop, ansel.AVIF(quality: quality)),
       bounding_box: bounding_box,
       quality: quality,
     )
   })
+  |> result.all
 }
