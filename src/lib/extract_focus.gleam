@@ -6,6 +6,7 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/result
+import snag
 
 /// Calculate the xywh of the focus crops to make an "oval" shape 
 /// out of two large rectangles (cropped into three so they don't overlap) 
@@ -83,4 +84,5 @@ pub fn from_image(image: ansel.Image, focus_percent: Float) {
     core_types.ExtractedArea(area: crop, bounding_box: bounding_box)
   })
   |> result.all
+  |> snag.context("Failed to extract focus points from image")
 }

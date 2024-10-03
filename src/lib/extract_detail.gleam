@@ -9,6 +9,7 @@ import compression_server/types as core_types
 import gleam/int
 import gleam/list
 import gleam/result
+import snag
 
 /// Half the size of the detail crop. If this value is 32, the detail
 /// crop will be 64x64 pixels.
@@ -55,4 +56,5 @@ pub fn from_image(image: ansel.Image) {
     )
   })
   |> result.all
+  |> snag.context("Failed to extract details from image")
 }

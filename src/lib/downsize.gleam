@@ -13,6 +13,7 @@ pub fn image(
     True -> image.resize_width_to(image, target_size)
     False -> image.resize_height_to(image, target_size)
   }
+  |> snag.context("Failed to downsize image")
 }
 
 pub fn video() {

@@ -70,4 +70,5 @@ pub fn from_image(
     core_types.ExtractedArea(area: face, bounding_box: expanded_face)
   })
   |> result.all
+  |> snag.context("Failed to extract faces from image")
 }
