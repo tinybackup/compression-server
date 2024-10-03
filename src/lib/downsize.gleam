@@ -1,10 +1,29 @@
 import ansel
 import ansel/image
+import gleam/int
 import snag
 
-pub fn image(
+pub fn calculate_scale(image, target_size) {
+  let original_width = image.get_width(image)
+  let original_height = image.get_height(image)
+
+  case original_width > original_height {
+    True -> int.to_float(target_size) /. int.to_float(original_width)
+    False -> int.to_float(target_size) /. int.to_float(original_height)
+  }
+}
+
+pub fn image_by(
   image: ansel.Image,
-  target_size: Int,
+  scale scale: Float,
+) -> Result(ansel.Image, snag.Snag) {
+  image.resize_by(image, scale)
+  |> snag.context("Failed to downsize image")
+}
+
+pub fn image_to(
+  image: ansel.Image,
+  size target_size: Int,
 ) -> Result(ansel.Image, snag.Snag) {
   let original_width = image.get_width(image)
   let original_height = image.get_height(image)
