@@ -1,10 +1,10 @@
 import ansel
 import ansel/fixed_bounding_box
 import ansel/image
-import tempo
 import gleam/option
+import tempo
 
-pub const bit_separator = "tbdv1"
+pub const bit_separator = "tbdv01"
 
 pub type TargetSize {
   Original

@@ -8,6 +8,7 @@ import gleam/bytes_builder
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/string
 import lib/form_metadata
 
 pub fn into_image(
@@ -85,6 +86,13 @@ pub fn into_image(
       details_length,
     )
 
+  let footer_size =
+    core_types.bit_separator
+    <> file_footer
+    |> bytes_builder.byte_size
+    |> int.to_string
+    |> string.pad_left(to: 5, with: "0")
+
   bytes_builder.from_bit_array(baseline)
   // If metadata is second after the baseline instead of another image,
   // more image viewers will be able to read it.
@@ -93,6 +101,7 @@ pub fn into_image(
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(focus_points))
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(details))
   |> bytes_builder.append_builder(file_footer)
+  |> bytes_builder.append_string(footer_size)
   |> bytes_builder.to_bit_array
 }
 

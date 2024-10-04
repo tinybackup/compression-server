@@ -48,6 +48,7 @@ pub fn image(
         config.baseline_size,
         face_areas |> list.map(fn(area) { area.bounding_box }),
         focus_point_areas |> list.map(fn(area) { area.bounding_box }),
+        detail_areas |> list.map(fn(area) { area.bounding_box }),
         datetime,
         datetime_offset,
         original_file_path,
