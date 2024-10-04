@@ -44,26 +44,26 @@ pub fn get_image_config(
         write_baseline: fn(image) {
           image.to_bit_array(
             image,
-            ansel.Custom(".avif[Q=30,strip=true,effort=9]"),
+            ansel.Custom(".avif[Q=30,strip=true,effort=4]"),
           )
         },
         write_face: fn(image) {
           image.to_bit_array(
             image,
-            ansel.Custom(".avif[Q=40,strip=true,effort=9]"),
+            ansel.Custom(".avif[Q=40,strip=true,effort=4]"),
           )
         },
         focus_percent: 0.45,
         write_focus_point: fn(image) {
           image.to_bit_array(
             image,
-            ansel.Custom(".avif[Q=30,strip=true,effort=9]"),
+            ansel.Custom(".avif[Q=30,strip=true,effort=4]"),
           )
         },
         write_detail: fn(image) {
           image.to_bit_array(
             image,
-            ansel.Custom(".avif[Q=50,strip=true,effort=9]"),
+            ansel.Custom(".avif[Q=50,strip=true,effort=4]"),
           )
         },
         compatability_mode: False,

@@ -4,18 +4,22 @@ import ansel/fixed_bounding_box
 import ansel/image
 import compression_server/types as core_types
 import gleam/bit_array
+import gleam/int
 import gleam/list
 import gleam/option
 import lib/form_metadata
 
 pub fn into_image(
-  baseline: ansel.Image,
+  tiny_image: ansel.Image,
   faces: List(core_types.ExtractedArea),
   focus_points: List(core_types.ExtractedArea),
   details: List(core_types.ExtractedArea),
   metadata: BitArray,
   config: core_types.ImageConfig,
 ) {
+  let tiny_scale =
+    int.to_float(config.target_size) /. int.to_float(config.baseline_size)
+
   let focus_point_bounding_boxes =
     list.map(focus_points, fn(area) { area.bounding_box })
 
@@ -27,13 +31,13 @@ pub fn into_image(
   // of the baseline and focus point images that were extracted in 
   // higher quality in other areas. This reduces the output file size.
   let #(baseline, focus_points) = case config.compatability_mode {
-    True -> #(baseline, focus_points)
+    True -> #(tiny_image, focus_points)
 
     False -> #(
-      baseline
-        |> backfill_extracted_areas(focus_point_bounding_boxes)
-        |> backfill_extracted_areas(face_bounding_boxes)
-        |> backfill_extracted_areas(detail_bounding_boxes),
+      tiny_image
+        |> backfill_extracted_areas(face_bounding_boxes, tiny_scale)
+        |> backfill_extracted_areas(focus_point_bounding_boxes, tiny_scale)
+        |> backfill_extracted_areas(detail_bounding_boxes, tiny_scale),
       focus_points
         |> list.map(fn(extracted_area) {
           core_types.ExtractedArea(
@@ -41,6 +45,7 @@ pub fn into_image(
             area: backfill_extracted_areas(
               extracted_area.area,
               face_bounding_boxes,
+              tiny_scale,
             ),
           )
         }),
@@ -84,19 +89,24 @@ pub fn into_image(
   |> bit_array.concat
 }
 
-fn backfill_extracted_areas(image, areas) {
-  let width = image.get_width(image)
-  let height = image.get_height(image)
+fn backfill_extracted_areas(tiny_image, areas, tiny_image_scale) {
+  let width = image.get_width(tiny_image)
+  let height = image.get_height(tiny_image)
 
-  let base = fixed_bounding_box.LTWH(0, 0, width, height)
-
-  list.map(areas, fixed_bounding_box.intersection(base, _))
-  |> option.values
-  |> list.map(fixed_bounding_box.shrink(_, by: 5))
-  |> list.fold(from: image, with: fn(image, area) {
-    case image.fill(image, in: area, with: color.Grey) {
-      Ok(filled) -> filled
-      Error(_) -> image
-    }
-  })
+  case fixed_bounding_box.ltwh(0, 0, width, height) {
+    Ok(base) ->
+      areas
+      |> list.map(fixed_bounding_box.resize_by(_, scale: tiny_image_scale))
+      |> list.map(fixed_bounding_box.intersection(base, _))
+      |> option.values
+      |> list.map(fixed_bounding_box.shrink(_, by: 5))
+      |> option.values
+      |> list.fold(from: tiny_image, with: fn(image, area) {
+        case image.fill(image, in: area, with: color.Grey) {
+          Ok(filled) -> filled
+          Error(_) -> image
+        }
+      })
+    Error(_) -> tiny_image
+  }
 }

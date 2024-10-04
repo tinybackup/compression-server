@@ -30,11 +30,11 @@ pub fn from_image(
     let face_smallest_dimension =
       int.min(face_width, face_height) |> int.to_float
 
-    let expanded_face = case
+    use expanded_face <- result.try(case
       face_smallest_dimension /. image_smallest_dimension <. 0.08
     {
       True ->
-        fixed_bounding_box.LTWH(
+        fixed_bounding_box.ltwh(
           left: int.max(
             0,
             face_left - float.truncate(face_smallest_dimension *. 1.5),
@@ -57,8 +57,8 @@ pub fn from_image(
           ),
         )
 
-      False -> expanded_face
-    }
+      False -> Ok(expanded_face)
+    })
 
     use expanded_face <- result.try(
       image.fit_fixed_bounding_box(expanded_face, in: image)

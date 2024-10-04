@@ -22,7 +22,7 @@ pub fn from_image(image: ansel.Image) {
   let smallest_dimension = int.min(width, height)
 
   let get_bounding_box = fn(center_x, center_y) {
-    fixed_bounding_box.LTRB(
+    fixed_bounding_box.ltrb(
       left: center_x - detail_crop_half_size,
       top: center_y - detail_crop_half_size,
       right: center_x + detail_crop_half_size,
@@ -30,30 +30,33 @@ pub fn from_image(image: ansel.Image) {
     )
   }
 
-  let detail_bounding_boxes = [
-    // Top-left quadrant center
-    get_bounding_box(smallest_dimension / 4, smallest_dimension / 4),
-    // Top-right quadrant center
-    get_bounding_box(width - { smallest_dimension / 4 }, smallest_dimension / 4),
-    // Bottom-left quadrant center 
-    get_bounding_box(
-      smallest_dimension / 4,
-      height - { smallest_dimension / 4 },
-    ),
-    // Bottom-right quadrant center
-    get_bounding_box(
-      width - { smallest_dimension / 4 },
-      height - { smallest_dimension / 4 },
-    ),
-  ]
+  use detail_bounding_boxes <- result.try(
+    [
+      // Top-left quadrant center
+      get_bounding_box(smallest_dimension / 4, smallest_dimension / 4),
+      // Top-right quadrant center
+      get_bounding_box(
+        width - { smallest_dimension / 4 },
+        smallest_dimension / 4,
+      ),
+      // Bottom-left quadrant center 
+      get_bounding_box(
+        smallest_dimension / 4,
+        height - { smallest_dimension / 4 },
+      ),
+      // Bottom-right quadrant center
+      get_bounding_box(
+        width - { smallest_dimension / 4 },
+        height - { smallest_dimension / 4 },
+      ),
+    ]
+    |> result.all,
+  )
 
   list.map(detail_bounding_boxes, fn(bounding_box) {
     use crop <- result.map(image.extract_area(from: image, at: bounding_box))
 
-    core_types.ExtractedArea(
-      area: crop,
-      bounding_box: bounding_box,
-    )
+    core_types.ExtractedArea(area: crop, bounding_box: bounding_box)
   })
   |> result.all
   |> snag.context("Failed to extract details from image")
