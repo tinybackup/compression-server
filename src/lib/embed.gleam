@@ -79,17 +79,19 @@ pub fn into_image(
   let file_footer =
     form_metadata.for_image_footer(
       baseline_length,
+      metadata_length,
       faces_length,
       focus_points_length,
       details_length,
-      metadata_length,
     )
 
   bytes_builder.from_bit_array(baseline)
+  // If metadata is second after the baseline instead of another image,
+  // more image viewers will be able to read it.
+  |> bytes_builder.append_builder(metadata)
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(faces))
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(focus_points))
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(details))
-  |> bytes_builder.append_builder(metadata)
   |> bytes_builder.append_builder(file_footer)
   |> bytes_builder.to_bit_array
 }

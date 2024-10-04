@@ -75,10 +75,10 @@ pub fn for_image(
 
 pub fn for_image_footer(
   baseline_length: Int,
+  metadata_length: Int,
   faces_length: List(Int),
   focus_points_length: List(Int),
   details_length: List(Int),
-  metadata_length: Int,
 ) {
   bytes_builder.from_string(core_types.bit_separator)
   |> bytes_builder.append_string("b")
