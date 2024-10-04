@@ -61,7 +61,6 @@ pub fn for_image(
   |> bytes_builder.append_string("\"")
   |> bytes_builder.append_string(user_metadata |> string.replace("\"", "'"))
   |> bytes_builder.append_string("\"")
-  |> bytes_builder.to_bit_array
 }
 
 pub fn for_image_footer(
@@ -93,5 +92,4 @@ pub fn for_image_footer(
     |> bytes_builder.concat,
   )
   |> bytes_builder.append_string(metadata_length |> int.to_string)
-  |> bytes_builder.to_bit_array
 }

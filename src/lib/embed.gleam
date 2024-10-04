@@ -4,6 +4,7 @@ import ansel/fixed_bounding_box
 import ansel/image
 import compression_server/types as core_types
 import gleam/bit_array
+import gleam/bytes_builder
 import gleam/int
 import gleam/list
 import gleam/option
@@ -14,7 +15,7 @@ pub fn into_image(
   faces: List(core_types.ExtractedArea),
   focus_points: List(core_types.ExtractedArea),
   details: List(core_types.ExtractedArea),
-  metadata: BitArray,
+  metadata,
   config: core_types.ImageConfig,
 ) {
   let tiny_scale =
@@ -73,7 +74,7 @@ pub fn into_image(
   let faces_length = list.map(faces, bit_array.byte_size)
   let focus_points_length = list.map(focus_points, bit_array.byte_size)
   let details_length = list.map(details, bit_array.byte_size)
-  let metadata_length = bit_array.byte_size(metadata)
+  let metadata_length = bytes_builder.byte_size(metadata)
 
   let file_footer =
     form_metadata.for_image_footer(
@@ -84,9 +85,13 @@ pub fn into_image(
       metadata_length,
     )
 
-  [[baseline], faces, focus_points, details, [metadata], [file_footer]]
-  |> list.flatten
-  |> bit_array.concat
+  bytes_builder.from_bit_array(baseline)
+  |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(faces))
+  |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(focus_points))
+  |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(details))
+  |> bytes_builder.append_builder(metadata)
+  |> bytes_builder.append_builder(file_footer)
+  |> bytes_builder.to_bit_array
 }
 
 fn backfill_extracted_areas(tiny_image, areas, tiny_image_scale) {
