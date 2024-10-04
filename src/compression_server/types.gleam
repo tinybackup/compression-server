@@ -1,6 +1,8 @@
 import ansel
 import ansel/fixed_bounding_box
 import ansel/image
+import tempo
+import gleam/option
 
 pub const bit_separator = "tbdv1"
 
@@ -120,7 +122,8 @@ fn size_up(target_size: TargetSize) -> TargetSize {
 pub type CompressionRequest {
   Image(
     image: ansel.Image,
-    date: String,
+    datetime: tempo.NaiveDateTime,
+    datetime_offset: option.Option(tempo.Offset),
     is_favorite: Bool,
     target_size: TargetSize,
     original_file_path: String,

@@ -2,6 +2,7 @@ import ansel
 import ansel/fixed_bounding_box
 import compression_server/types as core_types
 import gleam/list
+import gleam/option
 import gleam/result
 import lib/downsize
 import lib/embed
@@ -10,10 +11,12 @@ import lib/extract_faces
 import lib/extract_focus
 import lib/form_metadata
 import snag
+import tempo
 
 pub fn image(
   image: ansel.Image,
-  date: String,
+  datetime: tempo.NaiveDateTime,
+  datetime_offset: option.Option(tempo.Offset),
   config: core_types.ImageConfig,
   original_file_path: String,
   is_favorite: Bool,
@@ -45,7 +48,8 @@ pub fn image(
         config.baseline_size,
         face_areas |> list.map(fn(area) { area.bounding_box }),
         focus_point_areas |> list.map(fn(area) { area.bounding_box }),
-        date,
+        datetime,
+        datetime_offset,
         original_file_path,
         is_favorite,
         user_metadata,

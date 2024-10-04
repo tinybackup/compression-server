@@ -3,13 +3,18 @@ import compression_server/types as core_types
 import gleam/bytes_builder
 import gleam/int
 import gleam/list
+import gleam/option.{None, Some}
 import gleam/string
+import tempo
+import tempo/naive_datetime
+import tempo/offset
 
 pub fn for_image(
   baseline_size: Int,
   face_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
   focus_point_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
-  date: String,
+  datetime: tempo.NaiveDateTime,
+  datetime_offset: option.Option(tempo.Offset),
   original_file_path: String,
   is_favorite: Bool,
   user_metadata: String,
@@ -18,7 +23,12 @@ pub fn for_image(
   |> bytes_builder.append_string("b")
   |> bytes_builder.append_string(baseline_size |> int.to_string)
   |> bytes_builder.append_string("d")
-  |> bytes_builder.append_string(date)
+  |> bytes_builder.append_string(datetime |> naive_datetime.to_string)
+  |> bytes_builder.append_string("o")
+  |> bytes_builder.append_string(case datetime_offset {
+    Some(offset) -> offset |> offset.to_string
+    None -> ""
+  })
   |> bytes_builder.append_string("a\"")
   |> bytes_builder.append_string(
     original_file_path |> string.replace("\"", "'"),
