@@ -16,7 +16,7 @@ pub fn into_image(
   faces: List(core_types.ExtractedArea),
   focus_points: List(core_types.ExtractedArea),
   details: List(core_types.ExtractedArea),
-  metadata,
+  metadata_chunk: bytes_builder.BytesBuilder,
   config: core_types.ImageConfig,
 ) {
   let tiny_scale =
@@ -75,9 +75,9 @@ pub fn into_image(
   let faces_length = list.map(faces, bit_array.byte_size)
   let focus_points_length = list.map(focus_points, bit_array.byte_size)
   let details_length = list.map(details, bit_array.byte_size)
-  let metadata_length = bytes_builder.byte_size(metadata)
+  let metadata_length = bytes_builder.byte_size(metadata_chunk)
 
-  let file_footer =
+  let file_footer_chunk =
     form_metadata.for_image_footer(
       baseline_length,
       metadata_length,
@@ -86,22 +86,22 @@ pub fn into_image(
       details_length,
     )
 
-  let footer_size =
+  let footer_size_chunk =
     core_types.bit_separator
-    <> file_footer
+    <> file_footer_chunk
     |> bytes_builder.byte_size
     |> int.to_string
-    |> string.pad_left(to: 5, with: "0")
+    |> string.pad_left(to: form_metadata.footer_size_marker_size, with: "0")
 
   bytes_builder.from_bit_array(baseline)
   // If metadata is second after the baseline instead of another image,
   // more image viewers will be able to read it.
-  |> bytes_builder.append_builder(metadata)
+  |> bytes_builder.append_builder(metadata_chunk)
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(faces))
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(focus_points))
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(details))
-  |> bytes_builder.append_builder(file_footer)
-  |> bytes_builder.append_string(footer_size)
+  |> bytes_builder.append_builder(file_footer_chunk)
+  |> bytes_builder.append_string(footer_size_chunk)
   |> bytes_builder.to_bit_array
 }
 

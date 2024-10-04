@@ -43,7 +43,7 @@ pub fn image(
 
     use detail_areas <- result.try(extract_detail.from_image(baseline_image))
 
-    let metadata =
+    let metadata_chunk =
       form_metadata.for_image(
         config.baseline_size,
         face_areas |> list.map(fn(area) { area.bounding_box }),
@@ -66,7 +66,7 @@ pub fn image(
       face_areas,
       focus_point_areas,
       detail_areas,
-      metadata,
+      metadata_chunk,
       config,
     )
   }
