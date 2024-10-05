@@ -83,11 +83,14 @@ pub fn into_image(
     )
 
   let footer_size_chunk =
-    core_types.bit_separator
-    <> file_footer_chunk
-    |> bytes_builder.byte_size
-    |> int.to_string
-    |> string.pad_left(to: form_metadata.footer_size_marker_size, with: "0")
+    bit_array.concat([
+      core_types.bit_separator,
+      file_footer_chunk
+        |> bytes_builder.byte_size
+        |> int.to_string
+        |> string.pad_left(to: form_metadata.footer_size_marker_size, with: "0")
+        |> bit_array.from_string,
+    ])
 
   bytes_builder.from_bit_array(baseline)
   // If metadata is second after the baseline instead of another image,
@@ -97,7 +100,7 @@ pub fn into_image(
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(focus_points))
   |> bytes_builder.append_builder(bytes_builder.concat_bit_arrays(details))
   |> bytes_builder.append_builder(file_footer_chunk)
-  |> bytes_builder.append_string(footer_size_chunk)
+  |> bytes_builder.append(footer_size_chunk)
   |> bytes_builder.to_bit_array
 }
 

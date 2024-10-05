@@ -45,7 +45,7 @@ pub fn for_image(
   is_favorite: Bool,
   user_metadata: String,
 ) {
-  bytes_builder.from_string(core_types.bit_separator)
+  bytes_builder.from_bit_array(core_types.bit_separator)
   |> bytes_builder.append_string(baseline_marker)
   |> bytes_builder.append_string(baseline_size |> int.to_string)
   |> bytes_builder.append_string(time_marker)
@@ -135,19 +135,19 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
   use bit_separator <- result.try(bit_array.slice(
     from: image_metadata_chunk,
     at: 0,
-    take: core_types.bit_separator |> string.length,
+    take: core_types.bit_separator |> bit_array.byte_size,
   ))
   use <- bool.guard(
-    when: bit_separator != core_types.bit_separator |> bit_array.from_string,
+    when: bit_separator != core_types.bit_separator,
     return: Error(Nil),
   )
 
   use metadata_graphemes <- result.try(
     bit_array.slice(
       from: image_metadata_chunk,
-      at: core_types.bit_separator |> string.length,
+      at: core_types.bit_separator |> bit_array.byte_size,
       take: bit_array.byte_size(image_metadata_chunk)
-        - { core_types.bit_separator |> string.length },
+        - { core_types.bit_separator |> bit_array.byte_size },
     )
     |> result.try(bit_array.to_string)
     |> result.map(string.to_graphemes),
@@ -350,7 +350,7 @@ pub fn for_image_footer(
   focus_points_length: List(Int),
   details_length: List(Int),
 ) {
-  bytes_builder.from_string(core_types.bit_separator)
+  bytes_builder.from_bit_array(core_types.bit_separator)
   |> bytes_builder.append_string(baseline_marker)
   |> bytes_builder.append_string(baseline_length |> int.to_string)
   |> bytes_builder.append_string(metadata_marker)
@@ -393,7 +393,7 @@ pub type ImageFooter {
 /// where the last 5 bits are the footer length and the footer contains the
 /// lengths of all other areas in the image.
 pub fn parse_image_footer(from_image bits: BitArray) {
-  let bit_separator_size = core_types.bit_separator |> string.length
+  let bit_separator_size = core_types.bit_separator |> bit_array.byte_size
 
   let footer_size_marker_chunk_size =
     footer_size_marker_size + bit_separator_size
@@ -411,7 +411,7 @@ pub fn parse_image_footer(from_image bits: BitArray) {
   ))
 
   use <- bool.guard(
-    when: bit_separator != core_types.bit_separator |> bit_array.from_string,
+    when: bit_separator != core_types.bit_separator,
     return: Error(Nil),
   )
 
@@ -438,14 +438,14 @@ pub fn parse_image_footer(from_image bits: BitArray) {
   ))
 
   use <- bool.guard(
-    when: bit_separator != core_types.bit_separator |> bit_array.from_string,
+    when: bit_separator != core_types.bit_separator,
     return: Error(Nil),
   )
 
   use footer_graphemes <- result.try(
     bit_array.slice(
       footer_chunk,
-      at: core_types.bit_separator |> string.length,
+      at: bit_separator_size,
       take: bit_array.byte_size(footer_chunk) - bit_separator_size,
     )
     |> result.try(bit_array.to_string)

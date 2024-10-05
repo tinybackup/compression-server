@@ -4,8 +4,7 @@ import ansel/image
 import gleam/option
 import tempo
 
-// Should this just be a bit array? I'm always comverting it to one
-pub const bit_separator = "tbdv01"
+pub const bit_separator = <<"tbdv01">>
 
 pub type TargetSize {
   Original
