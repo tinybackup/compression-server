@@ -4,6 +4,7 @@ import ansel/image
 import gleam/option
 import tempo
 
+// Should this just be a bit array? I'm always comverting it to one
 pub const bit_separator = "tbdv01"
 
 pub type TargetSize {
@@ -41,8 +42,8 @@ pub fn get_image_config(
   case target_size {
     Tiny ->
       ImageConfig(
-        baseline_size: 1080,
-        target_size: 600,
+        baseline_size: 810,
+        target_size: 450,
         write_baseline: fn(image) {
           image.to_bit_array(
             image,
@@ -73,8 +74,8 @@ pub fn get_image_config(
 
     CompatableTiny ->
       ImageConfig(
-        baseline_size: 1080,
-        target_size: 600,
+        baseline_size: 810,
+        target_size: 450,
         write_baseline: fn(image) {
           image.to_bit_array(
             image,
@@ -122,7 +123,7 @@ fn size_up(target_size: TargetSize) -> TargetSize {
 pub type CompressionRequest {
   Image(
     image: ansel.Image,
-    datetime: tempo.NaiveDateTime,
+    datetime: tempo.NaiveDateTime, // Make sure this has second precision
     datetime_offset: option.Option(tempo.Offset),
     is_favorite: Bool,
     target_size: TargetSize,
