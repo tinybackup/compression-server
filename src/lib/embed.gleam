@@ -37,18 +37,14 @@ pub fn into_image(
 
     False -> #(
       tiny_image
-        |> backfill_extracted_areas(face_bounding_boxes, tiny_scale)
-        |> backfill_extracted_areas(focus_point_bounding_boxes, tiny_scale)
-        |> backfill_extracted_areas(detail_bounding_boxes, tiny_scale),
+        |> backfill_tiny_image(face_bounding_boxes, tiny_scale)
+        |> backfill_tiny_image(focus_point_bounding_boxes, tiny_scale)
+        |> backfill_tiny_image(detail_bounding_boxes, tiny_scale),
       focus_points
         |> list.map(fn(extracted_area) {
           core_types.ExtractedArea(
             ..extracted_area,
-            area: backfill_extracted_areas(
-              extracted_area.area,
-              face_bounding_boxes,
-              tiny_scale,
-            ),
+            area: backfill_extracted_areas(extracted_area, face_bounding_boxes),
           )
         }),
     )
@@ -105,7 +101,7 @@ pub fn into_image(
   |> bytes_builder.to_bit_array
 }
 
-fn backfill_extracted_areas(tiny_image, areas, tiny_image_scale) {
+fn backfill_tiny_image(tiny_image, areas, tiny_image_scale) {
   let width = image.get_width(tiny_image)
   let height = image.get_height(tiny_image)
 
@@ -113,9 +109,9 @@ fn backfill_extracted_areas(tiny_image, areas, tiny_image_scale) {
     Ok(base) ->
       areas
       |> list.map(fixed_bounding_box.resize_by(_, scale: tiny_image_scale))
-      |> list.map(fixed_bounding_box.intersection(base, _))
-      |> option.values
       |> list.map(fixed_bounding_box.shrink(_, by: 5))
+      |> option.values
+      |> list.map(fixed_bounding_box.intersection(base, _))
       |> option.values
       |> list.fold(from: tiny_image, with: fn(image, area) {
         case image.fill(image, in: area, with: color.Grey) {
@@ -125,4 +121,30 @@ fn backfill_extracted_areas(tiny_image, areas, tiny_image_scale) {
       })
     Error(_) -> tiny_image
   }
+}
+
+fn backfill_extracted_areas(
+  extracted_area: core_types.ExtractedArea,
+  greater_extracted_bb,
+) {
+  let extracted_bb = extracted_area.bounding_box
+
+  greater_extracted_bb
+  |> list.map(fixed_bounding_box.shrink(_, by: 5))
+  |> option.values
+  |> list.map(fixed_bounding_box.intersection(extracted_bb, _))
+  |> option.values
+  |> list.map(fixed_bounding_box.make_relative_to(_, extracted_bb))
+  |> list.map(fixed_bounding_box.fit(_, into: extracted_bb))
+  |> option.values
+  |> list.fold(from: extracted_area.area, with: fn(extracted_image, int) {
+    // If the area to fill takes up a total part of the image so that there
+    // is only one square of non-grey pixels, then the grey part to fill
+    // could be cut out of the image to save some space. Maybe about 200 bytes
+    // when applicable. But then we have to go back and update the metadata.
+    case image.fill(extracted_image, in: int, with: color.Grey) {
+      Ok(filled) -> filled
+      Error(_) -> extracted_image
+    }
+  })
 }
