@@ -43,18 +43,16 @@ pub fn from_image(
             0,
             face_top - float.truncate(face_smallest_dimension *. 0.75),
           ),
-          width: int.min(
-            image_width,
-            float.truncate(
-              face_smallest_dimension +. { face_smallest_dimension *. 3.0 },
-            ),
-          ),
-          height: int.min(
-            image_height,
-            float.truncate(
-              face_smallest_dimension +. { face_smallest_dimension *. 11.0 },
-            ),
-          ),
+          width: float.min(
+            image_smallest_dimension,
+            face_smallest_dimension +. { face_smallest_dimension *. 3.0 },
+          )
+            |> float.truncate,
+          height: float.min(
+            image_smallest_dimension,
+            face_smallest_dimension +. { face_smallest_dimension *. 11.0 },
+          )
+            |> float.truncate,
         )
 
       False -> Ok(expanded_face)

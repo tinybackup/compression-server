@@ -117,6 +117,232 @@ pub fn for_image(
   )
 }
 
+pub type ImageMetadata {
+  ImageMetadata(
+    baseline_size: Int,
+    face_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
+    focus_point_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
+    detail_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
+    datetime: tempo.NaiveDateTime,
+    datetime_offset: option.Option(tempo.Offset),
+    original_file_path: String,
+    is_favorite: Bool,
+    user_metadata: String,
+  )
+}
+
+pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
+  use bit_separator <- result.try(bit_array.slice(
+    from: image_metadata_chunk,
+    at: 0,
+    take: core_types.bit_separator |> string.length,
+  ))
+  use <- bool.guard(
+    when: bit_separator != core_types.bit_separator |> bit_array.from_string,
+    return: Error(Nil),
+  )
+
+  use metadata_graphemes <- result.try(
+    bit_array.slice(
+      from: image_metadata_chunk,
+      at: core_types.bit_separator |> string.length,
+      take: bit_array.byte_size(image_metadata_chunk)
+        - { core_types.bit_separator |> string.length },
+    )
+    |> result.try(bit_array.to_string)
+    |> result.map(string.to_graphemes),
+  )
+
+  use #(baseline_size, unconsumed_graphemes) <- result.try(consume_single_value(
+    metadata_graphemes,
+    baseline_marker,
+    checker: int.parse,
+    parser: int.parse,
+  ))
+
+  use #(datetime, unconsumed_graphemes) <- result.try(
+    consume_single_value(
+      unconsumed_graphemes,
+      time_marker,
+      checker: fn(grapheme) {
+        int.parse(grapheme)
+        |> result.try_recover(fn(_) {
+          case grapheme == "-" {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+        |> result.try_recover(fn(_) {
+          case grapheme == "T" {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+        |> result.try_recover(fn(_) {
+          case grapheme == ":" {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+        |> result.try_recover(fn(_) {
+          case grapheme == "." {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+      },
+      parser: fn(nd) { naive_datetime.from_string(nd) |> result.nil_error },
+    ),
+  )
+
+  use #(datetime_offset, unconsumed_graphemes) <- result.try(
+    consume_single_value(
+      unconsumed_graphemes,
+      offset_marker,
+      checker: fn(grapheme) {
+        int.parse(grapheme)
+        |> result.try_recover(fn(_) {
+          case grapheme == "Z" {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+        |> result.try_recover(fn(_) {
+          case grapheme == "z" {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+        |> result.try_recover(fn(_) {
+          case grapheme == ":" {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+        |> result.try_recover(fn(_) {
+          case grapheme == "-" {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+        |> result.try_recover(fn(_) {
+          case grapheme == "+" {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+      },
+      parser: fn(nd) {
+        case nd == ":" {
+          True -> Ok(None)
+          False ->
+            case offset.from_string(nd) {
+              Ok(offset) -> Ok(Some(offset))
+              Error(_) -> Error(Nil)
+            }
+        }
+      },
+    ),
+  )
+
+  use #(original_file_path, unconsumed_graphemes) <- result.try(
+    consume_sanitized_string(unconsumed_graphemes, file_path_marker),
+  )
+
+  use #(is_favorite, unconsumed_graphemes) <- result.try(
+    consume_single_value(
+      unconsumed_graphemes,
+      favorite_marker,
+      checker: int.parse,
+      parser: fn(b) {
+        case int.parse(b) {
+          Ok(1) -> Ok(True)
+          Ok(0) -> Ok(False)
+          Ok(_) -> Error(Nil)
+          Error(_) -> Error(Nil)
+        }
+      },
+    ),
+  )
+
+  use #(user_metadata, unconsumed_graphemes) <- result.try(
+    consume_sanitized_string(unconsumed_graphemes, user_metadata_marker),
+  )
+
+  use #(face_bounding_boxes, unconsumed_graphemes) <- result.try(
+    consume_list_values(
+      unconsumed_graphemes,
+      face_marker,
+      checker: fn(g) {
+        int.parse(g)
+        |> result.try_recover(fn(_) {
+          case g == "," {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+      },
+      parser: bounding_box_parser,
+    ),
+  )
+
+  use #(focus_point_bounding_boxes, unconsumed_graphemes) <- result.try(
+    consume_list_values(
+      unconsumed_graphemes,
+      focus_point_marker,
+      checker: fn(g) {
+        int.parse(g)
+        |> result.try_recover(fn(_) {
+          case g == "," {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+      },
+      parser: bounding_box_parser,
+    ),
+  )
+
+  use #(detail_bounding_boxes, unconsumed_graphemes) <- result.try(
+    consume_list_values(
+      unconsumed_graphemes,
+      detail_marker,
+      checker: fn(g) {
+        int.parse(g)
+        |> result.try_recover(fn(_) {
+          case g == "," {
+            True -> Ok(0)
+            False -> Error(Nil)
+          }
+        })
+      },
+      parser: bounding_box_parser,
+    ),
+  )
+
+  use <- bool.guard(when: unconsumed_graphemes != [], return: Error(Nil))
+
+  Ok(ImageMetadata(
+    baseline_size:,
+    face_bounding_boxes:,
+    focus_point_bounding_boxes:,
+    detail_bounding_boxes:,
+    datetime:,
+    datetime_offset:,
+    original_file_path:,
+    is_favorite:,
+    user_metadata:,
+  ))
+}
+
+fn bounding_box_parser(bb_str) {
+  case bb_str |> string.split(",") |> list.map(int.parse) |> result.all {
+    Ok([x, y, w, h]) -> fixed_bounding_box.ltwh(x, y, w, h) |> result.nil_error
+    Ok(_) -> Error(Nil)
+    Error(_) -> Error(Nil)
+  }
+}
+
 pub fn for_image_footer(
   baseline_length: Int,
   metadata_length: Int,
@@ -166,7 +392,7 @@ pub type ImageFooter {
 /// "tbdv01b6680m200f3286f3458f1396p3565p703p1375d492d735d787d626tbdv0100060"
 /// where the last 5 bits are the footer length and the footer contains the
 /// lengths of all other areas in the image.
-pub fn read_image_footer(from_image bits: BitArray) {
+pub fn parse_image_footer(from_image bits: BitArray) {
   let bit_separator_size = core_types.bit_separator |> string.length
 
   let footer_size_marker_chunk_size =
@@ -227,24 +453,45 @@ pub fn read_image_footer(from_image bits: BitArray) {
   )
 
   use #(baseline_length, unconsumed_graphemes) <- result.try(
-    consume_single_value(footer_graphemes, baseline_marker),
+    consume_single_value(
+      footer_graphemes,
+      baseline_marker,
+      checker: int.parse,
+      parser: int.parse,
+    ),
   )
 
   use #(metadata_length, unconsumed_graphemes) <- result.try(
-    consume_single_value(unconsumed_graphemes, metadata_marker),
+    consume_single_value(
+      unconsumed_graphemes,
+      metadata_marker,
+      checker: int.parse,
+      parser: int.parse,
+    ),
   )
 
-  use #(face_lengths, unconsumed_graphemes) <- result.try(
-    consume_variable_values(unconsumed_graphemes, face_marker),
-  )
+  use #(face_lengths, unconsumed_graphemes) <- result.try(consume_list_values(
+    unconsumed_graphemes,
+    face_marker,
+    checker: int.parse,
+    parser: int.parse,
+  ))
 
   use #(focus_point_lengths, unconsumed_graphemes) <- result.try(
-    consume_variable_values(unconsumed_graphemes, focus_point_marker),
+    consume_list_values(
+      unconsumed_graphemes,
+      focus_point_marker,
+      checker: int.parse,
+      parser: int.parse,
+    ),
   )
 
-  use #(detail_lengths, unconsumed_graphemes) <- result.try(
-    consume_variable_values(unconsumed_graphemes, detail_marker),
-  )
+  use #(detail_lengths, unconsumed_graphemes) <- result.try(consume_list_values(
+    unconsumed_graphemes,
+    detail_marker,
+    checker: int.parse,
+    parser: int.parse,
+  ))
 
   use <- bool.guard(when: unconsumed_graphemes != [], return: Error(Nil))
 
@@ -257,32 +504,43 @@ pub fn read_image_footer(from_image bits: BitArray) {
   ))
 }
 
-fn consume_single_value(graphemes, variable_marker) {
-  use vars <- result.map(case graphemes {
+fn consume_single_value(
+  graphemes,
+  variable_marker,
+  checker checker,
+  parser parser,
+) {
+  use vars <- result.try(case graphemes {
     [v, ..rest] if v == variable_marker ->
       list.take_while(rest, fn(grapheme) {
-        case int.parse(grapheme) {
+        case checker(grapheme) {
           Ok(_) -> True
           Error(_) -> False
         }
       })
       |> string.join("")
-      |> int.parse
+      |> Ok
 
     _ -> Error(Nil)
   })
 
-  let unconsumed_graphemes =
-    list.drop(graphemes, 1 + string.length(vars |> int.to_string))
+  let unconsumed_graphemes = list.drop(graphemes, 1 + string.length(vars))
+
+  use vars <- result.map(parser(vars))
 
   #(vars, unconsumed_graphemes)
 }
 
-fn consume_variable_values(graphemes, variable_marker) {
-  use vars <- result.map(
+fn consume_list_values(
+  graphemes,
+  variable_marker,
+  checker checker,
+  parser parser,
+) {
+  let vars =
     graphemes
     |> list.take_while(fn(grapheme) {
-      case int.parse(grapheme), grapheme == variable_marker {
+      case checker(grapheme), grapheme == variable_marker {
         Ok(_), _ -> True
         _, True -> True
         _, _ -> False
@@ -291,18 +549,39 @@ fn consume_variable_values(graphemes, variable_marker) {
     |> string.join("")
     |> string.split(variable_marker)
     |> list.drop(1)
-    |> list.map(int.parse)
-    |> result.all,
-  )
 
   let unconsumed_graphemes =
     list.drop(
       graphemes,
       list.length(vars)
         + list.fold(over: vars, from: 0, with: fn(acc, size) {
-        acc + string.length(size |> int.to_string)
+        acc + string.length(size)
       }),
     )
+
+  use vars <- result.map(list.map(vars, parser) |> result.all)
+
+  #(vars, unconsumed_graphemes)
+}
+
+fn consume_sanitized_string(graphemes, variable_marker) {
+  use vars <- result.map(case graphemes {
+    [v, e, ..rest] if v == variable_marker && e == "\"" ->
+      list.take_while(rest, fn(grapheme) { grapheme != "\"" })
+      // An empty string is permitted
+      |> fn(found) {
+        case found == [] {
+          True -> [""]
+          False -> found
+        }
+      }
+      |> string.join("")
+      |> Ok
+
+    _ -> Error(Nil)
+  })
+
+  let unconsumed_graphemes = list.drop(graphemes, 3 + string.length(vars))
 
   #(vars, unconsumed_graphemes)
 }
