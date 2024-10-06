@@ -12,9 +12,7 @@ import snag
 pub fn image(image: BitArray) {
   use #(baseline, metadata, faces, focus_points, details) <- result.try(
     image_to_parts(image)
-    |> result.replace_error(snag.new(
-      "Failed to split image into parts read image",
-    )),
+    |> result.replace_error(snag.new("Failed to split image into parts")),
   )
 
   use baseline <- result.try(image.from_bit_array(baseline))
@@ -54,17 +52,19 @@ pub fn image(image: BitArray) {
 fn image_to_parts(image: BitArray) {
   use footer <- result.try(form_metadata.parse_image_footer(image))
 
-  use baseline <- result.try(bit_array.slice(
-    from: image,
-    at: 0,
-    take: footer.baseline_length,
-  ))
+  use baseline <- result.try(
+    bit_array.slice(from: image, at: 0, take: footer.baseline_length)
+    |> result.replace_error(snag.new("Unable to slice baseline from image")),
+  )
 
-  use metadata <- result.try(bit_array.slice(
-    from: image,
-    at: footer.baseline_length,
-    take: footer.metadata_length,
-  ))
+  use metadata <- result.try(
+    bit_array.slice(
+      from: image,
+      at: footer.baseline_length,
+      take: footer.metadata_length,
+    )
+    |> result.replace_error(snag.new("Unable to slice metadata from image")),
+  )
 
   let #(face_length, faces) =
     list.map_fold(
@@ -82,7 +82,11 @@ fn image_to_parts(image: BitArray) {
       },
     )
 
-  use faces <- result.try(faces |> result.all)
+  use faces <- result.try(
+    faces
+    |> result.all
+    |> result.replace_error(snag.new("Unable to slice faces from image")),
+  )
 
   let #(focus_point_length, focus_points) =
     list.map_fold(
@@ -103,7 +107,11 @@ fn image_to_parts(image: BitArray) {
       },
     )
 
-  use focus_points <- result.try(focus_points |> result.all)
+  use focus_points <- result.try(
+    focus_points
+    |> result.all
+    |> result.replace_error(snag.new("Unable to slice focus points from image")),
+  )
 
   let #(_, details) =
     list.map_fold(
@@ -125,7 +133,11 @@ fn image_to_parts(image: BitArray) {
       },
     )
 
-  use details <- result.map(details |> result.all)
+  use details <- result.map(
+    details
+    |> result.all
+    |> result.replace_error(snag.new("Unable to slice details from image")),
+  )
 
   #(baseline, metadata, faces, focus_points, details)
 }
@@ -135,7 +147,8 @@ fn image_to_parts(image: BitArray) {
 @internal
 pub fn image_to_parts_to_disk(image: BitArray) {
   use #(baseline, metadata, faces, focus_points, details) <- result.try(
-    image_to_parts(image),
+    image_to_parts(image)
+    |> result.nil_error,
   )
 
   use _ <- result.try(

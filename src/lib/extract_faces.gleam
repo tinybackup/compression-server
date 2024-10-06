@@ -30,33 +30,34 @@ pub fn from_image(
     let face_smallest_dimension =
       int.min(face_width, face_height) |> int.to_float
 
-    use expanded_face <- result.try(case
-      face_smallest_dimension /. image_smallest_dimension <. 0.08
-    {
-      True ->
-        fixed_bounding_box.ltwh(
-          left: int.max(
-            0,
-            face_left - float.truncate(face_smallest_dimension *. 1.5),
-          ),
-          top: int.max(
-            0,
-            face_top - float.truncate(face_smallest_dimension *. 0.75),
-          ),
-          width: float.min(
-            image_smallest_dimension,
-            face_smallest_dimension +. { face_smallest_dimension *. 3.0 },
+    use expanded_face <- result.try(
+      case face_smallest_dimension /. image_smallest_dimension <. 0.08 {
+        True ->
+          fixed_bounding_box.ltwh(
+            left: int.max(
+              0,
+              face_left - float.truncate(face_smallest_dimension *. 1.5),
+            ),
+            top: int.max(
+              0,
+              face_top - float.truncate(face_smallest_dimension *. 0.75),
+            ),
+            width: float.min(
+              image_smallest_dimension,
+              face_smallest_dimension +. { face_smallest_dimension *. 3.0 },
+            )
+              |> float.truncate,
+            height: float.min(
+              image_smallest_dimension,
+              face_smallest_dimension +. { face_smallest_dimension *. 11.0 },
+            )
+              |> float.truncate,
           )
-            |> float.truncate,
-          height: float.min(
-            image_smallest_dimension,
-            face_smallest_dimension +. { face_smallest_dimension *. 11.0 },
-          )
-            |> float.truncate,
-        )
 
-      False -> Ok(expanded_face)
-    })
+        False -> Ok(expanded_face)
+      }
+      |> result.replace_error(snag.new("Failed to expand small face box")),
+    )
 
     use expanded_face <- result.try(
       image.fit_fixed_bounding_box(expanded_face, in: image)

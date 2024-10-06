@@ -1,5 +1,6 @@
 import ansel
 import ansel/image
+import gleam/float
 import gleam/int
 import snag
 
@@ -18,7 +19,7 @@ pub fn image_by(
   scale scale: Float,
 ) -> Result(ansel.Image, snag.Snag) {
   image.resize_by(image, scale)
-  |> snag.context("Failed to downsize image")
+  |> snag.context("Failed to downsize image by " <> float.to_string(scale))
 }
 
 pub fn image_to(
@@ -32,7 +33,7 @@ pub fn image_to(
     True -> image.resize_height_to(image, target_size)
     False -> image.resize_width_to(image, target_size)
   }
-  |> snag.context("Failed to downsize image")
+  |> snag.context("Failed to downsize image to " <> int.to_string(target_size))
 }
 
 pub fn restore_image(tiny_image: ansel.Image, to baseline: Int) {
@@ -43,6 +44,7 @@ pub fn restore_image(tiny_image: ansel.Image, to baseline: Int) {
     True -> image.resize_height_to(tiny_image, baseline)
     False -> image.resize_width_to(tiny_image, baseline)
   }
+  |> snag.context("Failed to restore image size to " <> int.to_string(baseline))
 }
 
 pub fn video() {

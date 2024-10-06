@@ -55,7 +55,7 @@ pub fn parse_missing_footer_test() {
   let footer = <<"Stop! You have violated the law!">>
 
   form_metadata.parse_image_footer(footer)
-  |> should.equal(Error(Nil))
+  |> should.be_error
 }
 
 pub fn parse_unknown_char_footer_test() {
@@ -64,7 +64,7 @@ pub fn parse_unknown_char_footer_test() {
   >>
 
   form_metadata.parse_image_footer(footer)
-  |> should.equal(Error(Nil))
+  |> should.be_error
 }
 
 pub fn parse_bad_footer_size_test() {
@@ -73,7 +73,7 @@ pub fn parse_bad_footer_size_test() {
   >>
 
   form_metadata.parse_image_footer(footer)
-  |> should.equal(Error(Nil))
+  |> should.be_error
 }
 
 pub fn parse_bad_footer_size_size_test() {
@@ -82,7 +82,7 @@ pub fn parse_bad_footer_size_size_test() {
   >>
 
   form_metadata.parse_image_footer(footer)
-  |> should.equal(Error(Nil))
+  |> should.be_error
 }
 
 pub fn parse_image_metadata_single_face_test() {
@@ -202,5 +202,5 @@ pub fn parse_bad_metadata_test() {
   >>
 
   form_metadata.parse_image_metadata(metadata)
-  |> should.equal(Error(Nil))
+  |> should.be_error
 }

@@ -8,6 +8,7 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
+import snag
 import tempo
 import tempo/naive_datetime
 import tempo/offset
@@ -132,14 +133,27 @@ pub type ImageMetadata {
 }
 
 pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
-  use bit_separator <- result.try(bit_array.slice(
-    from: image_metadata_chunk,
-    at: 0,
-    take: core_types.bit_separator |> bit_array.byte_size,
-  ))
-  use <- bool.guard(
+  use bit_separator <- result.try(
+    bit_array.slice(
+      from: image_metadata_chunk,
+      at: 0,
+      take: core_types.bit_separator |> bit_array.byte_size,
+    )
+    |> result.map_error(fn(_) {
+      snag.new(
+        "Unable to split bit separator from image metadata chunk: "
+        <> string.inspect(image_metadata_chunk),
+      )
+    }),
+  )
+
+  use <- bool.lazy_guard(
     when: bit_separator != core_types.bit_separator,
-    return: Error(Nil),
+    return: fn() {
+      snag.error(
+        "Found invalid bit separator: " <> string.inspect(bit_separator),
+      )
+    },
   )
 
   use metadata_graphemes <- result.try(
@@ -150,7 +164,13 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
         - { core_types.bit_separator |> bit_array.byte_size },
     )
     |> result.try(bit_array.to_string)
-    |> result.map(string.to_graphemes),
+    |> result.map(string.to_graphemes)
+    |> result.map_error(fn(_) {
+      snag.new(
+        "Unable to slice image metadata graphemes from: "
+        <> string.inspect(image_metadata_chunk),
+      )
+    }),
   )
 
   use #(baseline_size, unconsumed_graphemes) <- result.try(consume_single_value(
@@ -320,7 +340,12 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
     ),
   )
 
-  use <- bool.guard(when: unconsumed_graphemes != [], return: Error(Nil))
+  use <- bool.lazy_guard(when: unconsumed_graphemes != [], return: fn() {
+    snag.error(
+      "Found unconsumed graphemes left after parsing image metadata: "
+      <> string.inspect(unconsumed_graphemes),
+    )
+  })
 
   Ok(ImageMetadata(
     baseline_size:,
@@ -398,21 +423,30 @@ pub fn parse_image_footer(from_image bits: BitArray) {
   let footer_size_marker_chunk_size =
     footer_size_marker_size + bit_separator_size
 
-  use footer_size_marker <- result.try(bit_array.slice(
-    from: bits,
-    at: bit_array.byte_size(bits),
-    take: -footer_size_marker_chunk_size,
-  ))
+  use footer_size_marker <- result.try(
+    bit_array.slice(
+      from: bits,
+      at: bit_array.byte_size(bits),
+      take: -footer_size_marker_chunk_size,
+    )
+    |> result.replace_error(snag.new("Unable to slice image footer size chunk")),
+  )
 
-  use bit_separator <- result.try(bit_array.slice(
-    footer_size_marker,
-    at: 0,
-    take: bit_separator_size,
-  ))
+  use bit_separator <- result.try(
+    bit_array.slice(footer_size_marker, at: 0, take: bit_separator_size)
+    |> result.replace_error(snag.new(
+      "Unable to split bit separator from footer size chunk",
+    )),
+  )
 
-  use <- bool.guard(
+  use <- bool.lazy_guard(
     when: bit_separator != core_types.bit_separator,
-    return: Error(Nil),
+    return: fn() {
+      snag.error(
+        "Found invalid footer size chunk bit separator: "
+        <> string.inspect(bit_separator),
+      )
+    },
   )
 
   use footer_size <- result.try(
@@ -422,24 +456,42 @@ pub fn parse_image_footer(from_image bits: BitArray) {
       take: footer_size_marker_size,
     )
     |> result.try(bit_array.to_string)
-    |> result.try(int.parse),
+    |> result.try(int.parse)
+    |> result.map_error(fn(_) {
+      snag.new(
+        "Unable to parse footer size from: "
+        <> string.inspect(footer_size_marker),
+      )
+    }),
   )
 
-  use footer_chunk <- result.try(bit_array.slice(
-    from: bits,
-    at: bit_array.byte_size(bits) - footer_size_marker_chunk_size,
-    take: -{ footer_size },
-  ))
+  use footer_chunk <- result.try(
+    bit_array.slice(
+      from: bits,
+      at: bit_array.byte_size(bits) - footer_size_marker_chunk_size,
+      take: -{ footer_size },
+    )
+    |> result.replace_error(snag.new("Unable to slice image footer chunk")),
+  )
 
-  use bit_separator <- result.try(bit_array.slice(
-    footer_chunk,
-    at: 0,
-    take: bit_separator_size,
-  ))
+  use bit_separator <- result.try(
+    bit_array.slice(footer_chunk, at: 0, take: bit_separator_size)
+    |> result.map_error(fn(_) {
+      snag.new(
+        "Unable to split bit separator from footer chunk: "
+        <> string.inspect(footer_chunk),
+      )
+    }),
+  )
 
-  use <- bool.guard(
+  use <- bool.lazy_guard(
     when: bit_separator != core_types.bit_separator,
-    return: Error(Nil),
+    return: fn() {
+      snag.error(
+        "Found invalid footer chunk bit separator: "
+        <> string.inspect(bit_separator),
+      )
+    },
   )
 
   use footer_graphemes <- result.try(
@@ -449,7 +501,13 @@ pub fn parse_image_footer(from_image bits: BitArray) {
       take: bit_array.byte_size(footer_chunk) - bit_separator_size,
     )
     |> result.try(bit_array.to_string)
-    |> result.map(string.to_graphemes),
+    |> result.map(string.to_graphemes)
+    |> result.map_error(fn(_) {
+      snag.new(
+        "Unable to slice footer graphemes from: "
+        <> string.inspect(footer_chunk),
+      )
+    }),
   )
 
   use #(baseline_length, unconsumed_graphemes) <- result.try(
@@ -493,7 +551,12 @@ pub fn parse_image_footer(from_image bits: BitArray) {
     parser: int.parse,
   ))
 
-  use <- bool.guard(when: unconsumed_graphemes != [], return: Error(Nil))
+  use <- bool.lazy_guard(when: unconsumed_graphemes != [], return: fn() {
+    snag.error(
+      "Found unconsumed graphemes left after parsing footer: "
+      <> string.inspect(unconsumed_graphemes),
+    )
+  })
 
   Ok(ImageFooter(
     baseline_length:,
@@ -521,12 +584,30 @@ fn consume_single_value(
       |> string.join("")
       |> Ok
 
-    _ -> Error(Nil)
+    _ ->
+      fn() {
+        snag.error(
+          "Unable to consume single value with marker \""
+          <> variable_marker
+          <> "\" from "
+          <> string.inspect(graphemes),
+        )
+      }()
   })
 
   let unconsumed_graphemes = list.drop(graphemes, 1 + string.length(vars))
 
-  use vars <- result.map(parser(vars))
+  use vars <- result.map(
+    parser(vars)
+    |> result.map_error(fn(_) {
+      snag.new(
+        "Unable to parse single value with marker \""
+        <> variable_marker
+        <> "\" from "
+        <> vars,
+      )
+    }),
+  )
 
   #(vars, unconsumed_graphemes)
 }
@@ -559,7 +640,18 @@ fn consume_list_values(
       }),
     )
 
-  use vars <- result.map(list.map(vars, parser) |> result.all)
+  use vars <- result.map(
+    list.map(vars, parser)
+    |> result.all
+    |> result.map_error(fn(_) {
+      snag.new(
+        "Unable to parse list values with marker \""
+        <> variable_marker
+        <> "\" from "
+        <> string.inspect(vars),
+      )
+    }),
+  )
 
   #(vars, unconsumed_graphemes)
 }
@@ -578,7 +670,15 @@ fn consume_sanitized_string(graphemes, variable_marker) {
       |> string.join("")
       |> Ok
 
-    _ -> Error(Nil)
+    _ ->
+      fn() {
+        snag.error(
+          "Unable to parse sanitized string with marker \""
+          <> variable_marker
+          <> "\" from "
+          <> string.inspect(graphemes),
+        )
+      }()
   })
 
   let unconsumed_graphemes = list.drop(graphemes, 3 + string.length(vars))
