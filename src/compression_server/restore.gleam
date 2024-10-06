@@ -1,4 +1,3 @@
-import ansel
 import ansel/fixed_bounding_box
 import ansel/image
 import gleam/bit_array
@@ -48,16 +47,8 @@ pub fn image(image: BitArray) {
     |> apply(extractions: faces, at: metadata.face_bounding_boxes),
   )
 
-  use restored <- result.try(
-    restored
-    |> apply(extractions: details, at: metadata.detail_bounding_boxes),
-  )
-
-  image.write(
-    restored,
-    "restored",
-    ansel.AVIF(quality: 50, keep_metadata: False),
-  )
+  restored
+  |> apply(extractions: details, at: metadata.detail_bounding_boxes)
 }
 
 fn image_to_parts(image: BitArray) {

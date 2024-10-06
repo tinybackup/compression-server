@@ -46,26 +46,26 @@ pub fn get_image_config(
         write_baseline: fn(image) {
           image.to_bit_array(
             image,
-            ansel.Custom(".avif[Q=30,strip=true,effort=4]"),
+            ansel.AVIF(quality: 30, keep_metadata: False),
           )
         },
         write_face: fn(image) {
           image.to_bit_array(
             image,
-            ansel.Custom(".avif[Q=40,strip=true,effort=4]"),
+            ansel.AVIF(quality: 40, keep_metadata: False),
           )
         },
         focus_percent: 0.45,
         write_focus_point: fn(image) {
           image.to_bit_array(
             image,
-            ansel.Custom(".avif[Q=30,strip=true,effort=4]"),
+            ansel.AVIF(quality: 30, keep_metadata: False),
           )
         },
         write_detail: fn(image) {
           image.to_bit_array(
             image,
-            ansel.Custom(".avif[Q=50,strip=true,effort=4]"),
+            ansel.AVIF(quality: 40, keep_metadata: False),
           )
         },
         compatability_mode: False,
@@ -122,7 +122,8 @@ fn size_up(target_size: TargetSize) -> TargetSize {
 pub type CompressionRequest {
   Image(
     image: ansel.Image,
-    datetime: tempo.NaiveDateTime, // Make sure this has second precision
+    datetime: tempo.NaiveDateTime,
+    // Make sure this has second precision
     datetime_offset: option.Option(tempo.Offset),
     is_favorite: Bool,
     target_size: TargetSize,
