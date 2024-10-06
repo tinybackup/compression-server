@@ -6,6 +6,7 @@ import gleam/bytes_builder
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/regex
 import gleam/result
 import gleam/string
 import snag
@@ -176,7 +177,7 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
   use #(baseline_size, unconsumed_graphemes) <- result.try(consume_single_value(
     metadata_graphemes,
     baseline_marker,
-    checker: int.parse,
+    grapheme_consumer: "\\d",
     parser: int.parse,
   ))
 
@@ -184,33 +185,7 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
     consume_single_value(
       unconsumed_graphemes,
       time_marker,
-      checker: fn(grapheme) {
-        int.parse(grapheme)
-        |> result.try_recover(fn(_) {
-          case grapheme == "-" {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-        |> result.try_recover(fn(_) {
-          case grapheme == "T" {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-        |> result.try_recover(fn(_) {
-          case grapheme == ":" {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-        |> result.try_recover(fn(_) {
-          case grapheme == "." {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-      },
+      grapheme_consumer: "[\\d\\-Tt:\\.]",
       parser: fn(nd) { naive_datetime.from_string(nd) |> result.nil_error },
     ),
   )
@@ -219,39 +194,7 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
     consume_single_value(
       unconsumed_graphemes,
       offset_marker,
-      checker: fn(grapheme) {
-        int.parse(grapheme)
-        |> result.try_recover(fn(_) {
-          case grapheme == "Z" {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-        |> result.try_recover(fn(_) {
-          case grapheme == "z" {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-        |> result.try_recover(fn(_) {
-          case grapheme == ":" {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-        |> result.try_recover(fn(_) {
-          case grapheme == "-" {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-        |> result.try_recover(fn(_) {
-          case grapheme == "+" {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-      },
+      grapheme_consumer: "[\\dZz+-:]",
       parser: fn(nd) {
         case nd == ":" {
           True -> Ok(None)
@@ -273,7 +216,7 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
     consume_single_value(
       unconsumed_graphemes,
       favorite_marker,
-      checker: int.parse,
+      grapheme_consumer: "[01]",
       parser: fn(b) {
         case int.parse(b) {
           Ok(1) -> Ok(True)
@@ -293,15 +236,7 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
     consume_list_values(
       unconsumed_graphemes,
       face_marker,
-      checker: fn(g) {
-        int.parse(g)
-        |> result.try_recover(fn(_) {
-          case g == "," {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-      },
+      grapheme_consumer: "[\\d,]",
       parser: bounding_box_parser,
     ),
   )
@@ -310,15 +245,7 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
     consume_list_values(
       unconsumed_graphemes,
       focus_point_marker,
-      checker: fn(g) {
-        int.parse(g)
-        |> result.try_recover(fn(_) {
-          case g == "," {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-      },
+      grapheme_consumer: "[\\d,]",
       parser: bounding_box_parser,
     ),
   )
@@ -327,15 +254,7 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
     consume_list_values(
       unconsumed_graphemes,
       detail_marker,
-      checker: fn(g) {
-        int.parse(g)
-        |> result.try_recover(fn(_) {
-          case g == "," {
-            True -> Ok(0)
-            False -> Error(Nil)
-          }
-        })
-      },
+      grapheme_consumer: "[\\d,]",
       parser: bounding_box_parser,
     ),
   )
@@ -514,7 +433,7 @@ pub fn parse_image_footer(from_image bits: BitArray) {
     consume_single_value(
       footer_graphemes,
       baseline_marker,
-      checker: int.parse,
+      grapheme_consumer: "\\d",
       parser: int.parse,
     ),
   )
@@ -523,7 +442,7 @@ pub fn parse_image_footer(from_image bits: BitArray) {
     consume_single_value(
       unconsumed_graphemes,
       metadata_marker,
-      checker: int.parse,
+      grapheme_consumer: "\\d",
       parser: int.parse,
     ),
   )
@@ -531,7 +450,7 @@ pub fn parse_image_footer(from_image bits: BitArray) {
   use #(face_lengths, unconsumed_graphemes) <- result.try(consume_list_values(
     unconsumed_graphemes,
     face_marker,
-    checker: int.parse,
+    grapheme_consumer: "\\d",
     parser: int.parse,
   ))
 
@@ -539,7 +458,7 @@ pub fn parse_image_footer(from_image bits: BitArray) {
     consume_list_values(
       unconsumed_graphemes,
       focus_point_marker,
-      checker: int.parse,
+      grapheme_consumer: "\\d",
       parser: int.parse,
     ),
   )
@@ -547,7 +466,7 @@ pub fn parse_image_footer(from_image bits: BitArray) {
   use #(detail_lengths, unconsumed_graphemes) <- result.try(consume_list_values(
     unconsumed_graphemes,
     detail_marker,
-    checker: int.parse,
+    grapheme_consumer: "\\d",
     parser: int.parse,
   ))
 
@@ -570,17 +489,17 @@ pub fn parse_image_footer(from_image bits: BitArray) {
 fn consume_single_value(
   graphemes,
   variable_marker,
-  checker checker,
+  grapheme_consumer checker,
   parser parser,
 ) {
+  use checker <- result.try(
+    regex.from_string(checker)
+    |> result.replace_error(snag.new("Unable to compile regex")),
+  )
+
   use vars <- result.try(case graphemes {
     [v, ..rest] if v == variable_marker ->
-      list.take_while(rest, fn(grapheme) {
-        case checker(grapheme) {
-          Ok(_) -> True
-          Error(_) -> False
-        }
-      })
+      list.take_while(rest, regex.check(checker, _))
       |> string.join("")
       |> Ok
 
@@ -615,14 +534,19 @@ fn consume_single_value(
 fn consume_list_values(
   graphemes,
   variable_marker,
-  checker checker,
+  grapheme_consumer checker,
   parser parser,
 ) {
+  use checker <- result.try(
+    regex.from_string(checker)
+    |> result.replace_error(snag.new("Unable to compile regex")),
+  )
+
   let vars =
     graphemes
     |> list.take_while(fn(grapheme) {
-      case checker(grapheme), grapheme == variable_marker {
-        Ok(_), _ -> True
+      case regex.check(checker, grapheme), grapheme == variable_marker {
+        True, _ -> True
         _, True -> True
         _, _ -> False
       }
