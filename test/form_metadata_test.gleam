@@ -1,8 +1,8 @@
 import ansel/fixed_bounding_box
+import compression_server/lib/form_metadata
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import lib/form_metadata
 import tempo/naive_datetime
 import tempo/offset
 

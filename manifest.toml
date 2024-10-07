@@ -15,7 +15,7 @@ packages = [
   { name = "gleam_stdlib", version = "0.40.0", build_tools = ["gleam"], requirements = [], otp_app = "gleam_stdlib", source = "hex", outer_checksum = "86606B75A600BBD05E539EB59FABC6E307EEEA7B1E5865AFB6D980A93BCB2181" },
   { name = "gleeunit", version = "1.2.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gleeunit", source = "hex", outer_checksum = "F7A7228925D3EE7D0813C922E062BFD6D7E9310F0BEE585D3A42F3307E3CFD13" },
   { name = "glychee", version = "1.1.2", build_tools = ["gleam"], requirements = ["benchee"], otp_app = "glychee", source = "hex", outer_checksum = "41784216C213F223095BB3FC3EDDB60CC537835B2340A868EA3931193F7F3824" },
-  { name = "gtempo", version = "3.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gtempo", source = "hex", outer_checksum = "0D84F01497E1C2375DD5702018938D32811CB467DC1C0E4A22E84CEE0420A68E" },
+  { name = "gtempo", version = "3.3.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gtempo", source = "hex", outer_checksum = "EB6444E307889376E6844F28C79A7750A9FD4CBD44382955740F0005B8136E62" },
   { name = "kino", version = "0.14.1", build_tools = ["mix"], requirements = ["fss", "nx", "plug", "table"], otp_app = "kino", source = "hex", outer_checksum = "090AEA1AAA267E42E5AC24EE6BC5ED515AECC0A9EDB8619AA4EE839201E704AA" },
   { name = "mime", version = "2.0.6", build_tools = ["mix"], requirements = [], otp_app = "mime", source = "hex", outer_checksum = "C9945363A6B26D747389AAC3643F8E0E09D30499A138AD64FE8FD1D13D9B153E" },
   { name = "nx", version = "0.9.0", build_tools = ["mix"], requirements = ["complex", "telemetry"], otp_app = "nx", source = "hex", outer_checksum = "3810A5A90DB0654B6E538430C0FB473A22BFC11B3D02EA7834DB493CF3F56153" },

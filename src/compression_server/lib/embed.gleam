@@ -2,6 +2,7 @@ import ansel
 import ansel/color
 import ansel/fixed_bounding_box
 import ansel/image
+import compression_server/lib/form_metadata
 import compression_server/types as core_types
 import gleam/bit_array
 import gleam/bytes_builder
@@ -9,7 +10,6 @@ import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string
-import lib/form_metadata
 
 pub fn into_image(
   tiny_image: ansel.Image,

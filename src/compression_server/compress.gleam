@@ -1,15 +1,15 @@
 import ansel
 import ansel/fixed_bounding_box
+import compression_server/lib/downsize
+import compression_server/lib/embed
+import compression_server/lib/extract_detail
+import compression_server/lib/extract_faces
+import compression_server/lib/extract_focus
+import compression_server/lib/form_metadata
 import compression_server/types as core_types
 import gleam/list
 import gleam/option
 import gleam/result
-import lib/downsize
-import lib/embed
-import lib/extract_detail
-import lib/extract_faces
-import lib/extract_focus
-import lib/form_metadata
 import snag
 import tempo
 

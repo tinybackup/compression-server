@@ -1,11 +1,11 @@
 import ansel/fixed_bounding_box
 import ansel/image
+import compression_server/lib/downsize
+import compression_server/lib/form_metadata
 import gleam/bit_array
 import gleam/int
 import gleam/list
 import gleam/result
-import lib/downsize
-import lib/form_metadata
 import simplifile
 import snag
 
