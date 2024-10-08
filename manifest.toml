@@ -27,6 +27,7 @@ packages = [
   { name = "nx", version = "0.9.0", build_tools = ["mix"], requirements = ["complex", "telemetry"], otp_app = "nx", source = "hex", outer_checksum = "3810A5A90DB0654B6E538430C0FB473A22BFC11B3D02EA7834DB493CF3F56153" },
   { name = "plug", version = "1.16.1", build_tools = ["mix"], requirements = ["mime", "plug_crypto", "telemetry"], otp_app = "plug", source = "hex", outer_checksum = "A13FF6B9006B03D7E33874945B2755253841B238C34071ED85B0E86057F8CDDC" },
   { name = "plug_crypto", version = "2.1.0", build_tools = ["mix"], requirements = [], otp_app = "plug_crypto", source = "hex", outer_checksum = "131216A4B030B8F8CE0F26038BC4421AE60E4BB95C5CF5395E1421437824C4FA" },
+  { name = "repeatedly", version = "2.1.1", build_tools = ["gleam"], requirements = [], otp_app = "repeatedly", source = "hex", outer_checksum = "38808C3EC382B0CD981336D5879C24ECB37FCB9C1D1BD128F7A80B0F74404D79" },
   { name = "simplifile", version = "2.2.0", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "0DFABEF7DC7A9E2FF4BB27B108034E60C81BEBFCB7AB816B9E7E18ED4503ACD8" },
   { name = "snag", version = "0.3.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "snag", source = "hex", outer_checksum = "54D32E16E33655346AA3E66CBA7E191DE0A8793D2C05284E3EFB90AD2CE92BCC" },
   { name = "sqlight", version = "0.9.1", build_tools = ["gleam"], requirements = ["esqlite", "gleam_stdlib"], otp_app = "sqlight", source = "hex", outer_checksum = "A495F2892627B2268CCBCC5107EDC1E1AD9547D5F4F21A5DB04CEA72B8931B00" },
@@ -45,7 +46,8 @@ gleam_stdlib = { version = ">= 0.34.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 glychee = { version = ">= 1.1.2 and < 2.0.0" }
 gsiphash = { version = ">= 1.0.0 and < 2.0.0" }
-gtempo = { version = ">= 3.1.0" }
+gtempo = { version = ">= 3.3.0 and < 4.0.0" }
+repeatedly = { version = ">= 2.1.1 and < 3.0.0" }
 simplifile = { version = ">= 2.2.0 and < 3.0.0" }
 snag = { version = ">= 0.3.0 and < 1.0.0" }
 sqlight = { version = ">= 0.9.1 and < 1.0.0" }

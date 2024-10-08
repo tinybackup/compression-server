@@ -8,9 +8,17 @@ import gleam/result
 import gleam/string
 import simplifile
 import sqlight
+import tempo
+import tempo/datetime
 
 pub type FileEntry {
-  FileEntry(file_dir: String, file_name: String, hash: Int, status: FileStatus)
+  FileEntry(
+    file_dir: String,
+    file_name: String,
+    hash: Int,
+    status: FileStatus,
+    entry_mod_time: tempo.DateTime,
+  )
 }
 
 pub type FileStatus {
@@ -31,6 +39,7 @@ pub fn add_new_file(conn, file_dir, file_name, hash) {
       "'" <> file_name <> "'",
       int.to_string(hash),
       "'NEW'",
+      "'" <> datetime.now_local() |> datetime.to_string <> "'",
     ]
     |> string.join(",")
       <> ")",
@@ -46,31 +55,47 @@ pub fn add_new_file(conn, file_dir, file_name, hash) {
 
 pub fn mark_file_as_stale(conn, file_dir, file_name) {
   sqlight.exec(
-    "UPDATE files SET status = 'STALE' WHERE file_dir = '"
+    "UPDATE files SET status = 'STALE', entry_mod_time = '"
+      <> datetime.now_local() |> datetime.to_string
+      <> "' WHERE file_dir = '"
       <> file_dir
       <> "' AND file_name = '"
       <> file_name
       <> "'",
     on: conn,
   )
-  |> snagx.from_error("Unable to mark file as stale in file cache db")
+  |> snagx.from_error(
+    "Failed to mark file as stale in file cache db "
+    <> file_dir
+    <> "/"
+    <> file_name,
+  )
 }
 
 pub fn mark_file_as_processing(conn, file_dir, file_name) {
   sqlight.exec(
-    "UPDATE files SET status = 'PROCESSING' WHERE file_dir = '"
+    "UPDATE files SET status = 'PROCESSING', entry_mod_time = '"
+      <> datetime.now_local() |> datetime.to_string
+      <> "' WHERE file_dir = '"
       <> file_dir
       <> "' AND file_name = '"
       <> file_name
       <> "' AND status = 'NEW'",
     on: conn,
   )
-  |> snagx.from_error("Unable to mark file as processing in file cache db")
+  |> snagx.from_error(
+    "Failed to mark file as processing in file cache db "
+    <> file_dir
+    <> "/"
+    <> file_name,
+  )
 }
 
 pub fn mark_file_as_failed(conn, file_dir, file_name) {
   sqlight.exec(
-    "UPDATE files SET status = 'PROCESSING' WHERE file_dir = '"
+    "UPDATE files SET status = 'FAILED', entry_mod_time = '"
+      <> datetime.now_local() |> datetime.to_string
+      <> "' WHERE file_dir = '"
       <> file_dir
       <> "' AND file_name = '"
       <> file_name
@@ -82,7 +107,9 @@ pub fn mark_file_as_failed(conn, file_dir, file_name) {
 
 pub fn mark_file_as_backed_up(conn, file_dir, file_name) {
   sqlight.exec(
-    "UPDATE files SET status = 'BACKED_UP' WHERE file_dir = '"
+    "UPDATE files SET status = 'BACKED_UP', entry_mod_time = '"
+      <> datetime.now_local() |> datetime.to_string
+      <> "' WHERE file_dir = '"
       <> file_dir
       <> "' AND file_name = '"
       <> file_name
@@ -157,7 +184,7 @@ fn string_to_file_status(status: String) -> Result(FileStatus, Nil) {
 }
 
 fn file_entry_decoder(dy) {
-  dynamic.decode4(
+  dynamic.decode5(
     FileEntry,
     dynamic.element(0, dynamic.string),
     dynamic.element(1, dynamic.string),
@@ -167,12 +194,13 @@ fn file_entry_decoder(dy) {
       string_to_file_status(str)
       |> result.replace_error([dynamic.DecodeError("status", str, ["2"])])
     }),
+    dynamic.element(4, datetime.from_dynamic_string),
   )(dy)
 }
 
 const files_db_path = "data/files.db"
 
-const files_sql_columns = "file_dir, file_name, hash, status"
+const files_sql_columns = "file_dir, file_name, hash, status, entry_mod_time"
 
 const create_files_table_stmt = "
 CREATE TABLE IF NOT EXISTS files (
@@ -180,6 +208,7 @@ CREATE TABLE IF NOT EXISTS files (
   file_name TEXT NOT NULL,
   hash INTEGER NOT NULL,
   status TEXT NOT NULL,
+  entry_mod_time TEXT NOT NULL,
   PRIMARY KEY (file_dir, file_name, hash)
 )"
 
