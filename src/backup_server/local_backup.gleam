@@ -13,6 +13,9 @@ import repeatedly
 import simplifile
 import snag
 import sqlight
+import tempo
+import tempo/datetime
+import tempo/duration
 
 pub const file_hash_key = <<"8027f33215eaaba5">>
 
@@ -38,7 +41,7 @@ pub fn init_watcher_actor(directory_paths) {
 pub fn reconcile_dir_with_db(directory_path, conn) {
   use file_paths <- result.try(
     simplifile.get_files(directory_path)
-    |> snagx.from_error("Failed to get files in " <> directory_path),
+    |> snagx.from_simplifile("Failed to get files in " <> directory_path),
   )
 
   let disk_file_entries =
@@ -159,7 +162,7 @@ pub fn handle_fs_event(change: filespy.Change(String), state: WatcherActorState)
 fn hash_file(from_path path) {
   use file <- result.try(
     simplifile.read_bits(path)
-    |> snagx.from_error("Failed to read file at " <> path),
+    |> snagx.from_simplifile("Failed to read file at " <> path),
   )
 
   use hash <- result.map(
@@ -174,14 +177,71 @@ pub type BackupActorState {
   BackupActorState(conn: sqlight.Connection, face_detection_uri: String)
 }
 
-pub fn start_backup_repeater(face_detection_uri) {
+pub fn start_backup_repeater(face_detection_uri, backup_every_mins) {
   use conn <- result.map(file_cache.connect_to_files_db(read_only: True))
 
   let state = BackupActorState(conn:, face_detection_uri:)
 
-  todo
+  repeatedly.call(backup_every_mins * 60_000, state, run_backup)
 }
 
 pub fn run_backup(state: BackupActorState, backup_number: Int) {
   todo
+}
+
+const one_day = 86_400_000
+
+pub fn start_cleanup_repeater(delete_when_older_than_days) {
+  use conn <- result.map(file_cache.connect_to_files_db(read_only: True))
+
+  let state =
+    CleanUpActorState(
+      conn:,
+      delete_when_older_than: duration.days(delete_when_older_than_days),
+    )
+
+  repeatedly.call(one_day, state, run_cleanup)
+}
+
+pub type CleanUpActorState {
+  CleanUpActorState(
+    conn: sqlight.Connection,
+    delete_when_older_than: tempo.Duration,
+  )
+}
+
+pub fn run_cleanup(state: CleanUpActorState, cleanup_number: Int) {
+  use stale_files <- result.map(file_cache.get_stale_files(state.conn))
+
+  let processing_results =
+    list.filter(stale_files, fn(stale_file) {
+      stale_file.entry_mod_time
+      |> datetime.is_earlier(
+        than: datetime.now_local()
+        |> datetime.subtract(state.delete_when_older_than),
+      )
+    })
+    |> list.map(fn(overly_stale_file) {
+      let file_path =
+        filepath.join(overly_stale_file.file_dir, overly_stale_file.file_name)
+
+      simplifile.delete(file_path)
+      |> snagx.from_simplifile(
+        "Unable to delete overly stale file " <> file_path,
+      )
+    })
+
+  // Log any errors that occured while processing the files
+  processing_results
+  |> list.filter_map(fn(res) {
+    case res {
+      Error(e) -> Ok(e)
+      Ok(_) -> Error(Nil)
+    }
+  })
+  |> list.map(fn(processing_error) {
+    snag.layer(processing_error, "Error cleaning up stale file")
+    |> snag.pretty_print
+    |> io.println
+  })
 }
