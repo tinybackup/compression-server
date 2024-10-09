@@ -16,6 +16,19 @@ pub type TargetSize {
   CompatableTiny
 }
 
+pub fn string_to_target_size(size_str) {
+  case size_str {
+    "original" -> Ok(Original)
+    "medium" -> Ok(Medium)
+    "compatable_medium" -> Ok(CompatableMedium)
+    "small" -> Ok(Small)
+    "compatable_small" -> Ok(CompatableSmall)
+    "tiny" -> Ok(Tiny)
+    "compatable_tiny" -> Ok(CompatableTiny)
+    _ -> Error(Nil)
+  }
+}
+
 pub type ImageConfig {
   ImageConfig(
     baseline_size: Int,
@@ -30,8 +43,8 @@ pub type ImageConfig {
 }
 
 pub fn get_image_config(
-  target_size: TargetSize,
-  is_favorite: Bool,
+  target_size target_size: TargetSize,
+  is_favorite is_favorite: Bool,
 ) -> ImageConfig {
   let target_size = case is_favorite {
     True -> size_up(target_size)
@@ -122,8 +135,8 @@ fn size_up(target_size: TargetSize) -> TargetSize {
 pub type CompressionRequest {
   Image(
     image: ansel.Image,
-    datetime: tempo.NaiveDateTime,
     // Make sure this has second precision
+    datetime: tempo.NaiveDateTime,
     datetime_offset: option.Option(tempo.Offset),
     is_favorite: Bool,
     target_size: TargetSize,

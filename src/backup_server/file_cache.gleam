@@ -124,6 +124,20 @@ pub fn mark_file_as_backed_up(conn, file_dir, file_name) {
   )
 }
 
+pub fn get_files_needing_backup(conn) {
+  sqlight.query(
+    "SELECT "
+      <> files_sql_columns
+      <> " FROM files WHERE status = 'NEW' OR status = 'FAILED'",
+    on: conn,
+    with: [],
+    expecting: file_entry_decoder,
+  )
+  |> snagx.from_error(
+    "Failed to get files needing to be backed up from file cache db",
+  )
+}
+
 pub fn get_non_stale_files(conn) {
   sqlight.query(
     "SELECT " <> files_sql_columns <> " FROM files WHERE status != 'STALE'",
@@ -170,6 +184,14 @@ pub fn get_file_entry(conn, file_dir, file_name, hash) {
   list.first(res)
   |> result.map(Some)
   |> result.unwrap(None)
+}
+
+pub fn reset_processing_files(conn) {
+  sqlight.exec(
+    "UPDATE files SET status = 'NEW' WHERE status = 'PROCESSING'",
+    on: conn,
+  )
+  |> snagx.from_error("Failed to reset processing files in file cache db")
 }
 
 fn string_to_file_status(status: String) -> Result(FileStatus, Nil) {

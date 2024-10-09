@@ -14,14 +14,14 @@ import snag
 import tempo
 
 pub fn image(
-  image: ansel.Image,
-  datetime: tempo.NaiveDateTime,
-  datetime_offset: option.Option(tempo.Offset),
-  config: core_types.ImageConfig,
-  original_file_path: String,
-  is_favorite: Bool,
-  user_metadata: String,
-  faces: List(fixed_bounding_box.FixedBoundingBox),
+  image image: ansel.Image,
+  naive_datetime naive_datetime: tempo.NaiveDateTime,
+  offset offset: option.Option(tempo.Offset),
+  config config: core_types.ImageConfig,
+  original_file_path original_file_path: String,
+  is_favorite is_favorite: Bool,
+  user_metadata user_metadata: String,
+  faces faces: List(fixed_bounding_box.FixedBoundingBox),
 ) {
   {
     let baseline_scale = downsize.calculate_scale(image, config.baseline_size)
@@ -49,8 +49,8 @@ pub fn image(
         face_areas |> list.map(fn(area) { area.bounding_box }),
         focus_point_areas |> list.map(fn(area) { area.bounding_box }),
         detail_areas |> list.map(fn(area) { area.bounding_box }),
-        datetime,
-        datetime_offset,
+        naive_datetime,
+        offset,
         original_file_path,
         is_favorite,
         user_metadata,
