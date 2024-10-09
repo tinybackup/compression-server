@@ -255,6 +255,7 @@ pub fn run_backup(state: BackupActorState, backup_number: Int) {
         get_backup_path(
           base_dir: backup_base_path,
           with: file_needing_backup.hash,
+          targeting: target_size,
         )
 
       simplifile.write_bits(backup_image, to: backup_file_path)
@@ -281,14 +282,14 @@ pub fn run_backup(state: BackupActorState, backup_number: Int) {
   })
 }
 
-pub fn get_backup_path(base_dir base_dir, with file_hash) {
-  let hash_str = file_hash |> int.to_string
+pub fn get_backup_path(base_dir base_dir, with file_hash, targeting target_size) {
+  let hash_str = file_hash |> int.to_base16 |> string.lowercase
 
   string.to_graphemes(hash_str)
   |> list.take(3)
-  |> list.prepend(base_dir)
   |> list.append([hash_str])
-  |> list.fold(from: "", with: filepath.join)
+  |> list.fold(from: base_dir, with: filepath.join)
+  |> string.append(types.get_compressed_image_extension(target_size))
 }
 
 /// We have no way to determine if the file is a favorite or not in

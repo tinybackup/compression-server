@@ -120,6 +120,14 @@ pub fn get_image_config(
   }
 }
 
+pub fn get_compressed_image_extension(target_size target_size) {
+  case target_size {
+    CompatableTiny -> ".tinybackup.jpeg"
+    Tiny -> ".tinybackup.avif"
+    _ -> panic as "Extension not implemented"
+  }
+}
+
 fn size_up(target_size: TargetSize) -> TargetSize {
   case target_size {
     Original -> Original
