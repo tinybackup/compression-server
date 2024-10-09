@@ -35,13 +35,18 @@ pub type WatcherActorState {
 }
 
 pub fn init_watcher_actor(directory_paths) {
-  use conn <- result.try(file_cache.connect_to_files_db(read_only: False))
+  use conn <- result.try(
+    file_cache.connect_to_files_db(read_only: False)
+    |> log_if_error("Failed to start file system watcher"),
+  )
 
   use _ <- result.map(
     list.map(directory_paths, fn(directory_path) {
       reconcile_dir_with_db(directory_path, conn)
     })
-    |> result.all,
+    |> result.all
+    |> snag.context("Failed to reconcile directories with db")
+    |> log_if_error("Failed to start file system watcher"),
   )
 
   WatcherActorState(conn: conn)
@@ -57,14 +62,15 @@ pub fn reconcile_dir_with_db(directory_path, conn) {
     |> snagx.from_simplifile("Failed to get files in " <> directory_path),
   )
 
-  let disk_file_entries =
+  let #(disk_file_entries, disk_file_errors) =
     list.map(file_paths, fn(path) {
       use hash <- result.map(hash_file(from_path: path))
 
       #(filepath.directory_name(path), filepath.base_name(path), hash)
     })
-    // Log these errors 
-    |> result.values
+    |> result.partition
+
+  list.each(disk_file_errors, log_error)
 
   use db_file_entries <- result.try(file_cache.get_non_stale_files(conn))
 
@@ -100,7 +106,8 @@ pub fn reconcile_dir_with_db(directory_path, conn) {
       // with the new status.
       file_cache.add_new_file(conn, file_dir, file_name, hash)
     })
-    |> result.all,
+    |> result.all
+    |> snag.context("Failed to add new files to db"),
   )
 
   Nil
@@ -165,8 +172,7 @@ pub fn handle_fs_event(change: filespy.Change(String), state: WatcherActorState)
   })
   |> list.map(fn(processing_error) {
     snag.layer(processing_error, "Error processing file in watched directory")
-    |> snag.pretty_print
-    |> io.println
+    |> log_error
   })
 
   actor.continue(state)
@@ -195,10 +201,14 @@ pub fn start_backup_repeater(face_detection_uri, backup_every_mins) {
 
   let state = BackupActorState(conn:, face_detection_uri:)
 
-  repeatedly.call(backup_every_mins * 60_000, state, run_backup)
+  repeatedly.call(backup_every_mins * 60_000, state, fn(s, n) {
+    run_backup(s, n) |> log_if_error("Failed to process backup")
+  })
 }
 
 pub fn run_backup(state: BackupActorState, backup_number: Int) {
+  log("Running backup process #" <> int.to_string(backup_number))
+
   use files_needing_backup <- result.map(file_cache.get_files_needing_backup(
     state.conn,
   ))
@@ -278,8 +288,7 @@ pub fn run_backup(state: BackupActorState, backup_number: Int) {
   })
   |> list.map(fn(processing_error) {
     snag.layer(processing_error, "Error processing file needing backup")
-    |> snag.pretty_print
-    |> io.println
+    |> log_error
   })
 }
 
@@ -393,10 +402,14 @@ pub fn start_cleanup_repeater(delete_when_older_than_days) {
       delete_when_older_than: duration.days(delete_when_older_than_days),
     )
 
-  repeatedly.call(one_day, state, run_cleanup)
+  repeatedly.call(one_day, state, fn(s, n) {
+    run_cleanup(s, n) |> log_if_error("Failed to process cleanup")
+  })
 }
 
 pub fn run_cleanup(state: CleanUpActorState, cleanup_number: Int) {
+  log("Running cleanup process #" <> int.to_string(cleanup_number))
+
   use stale_files <- result.map(file_cache.get_stale_files(state.conn))
 
   let processing_results =
@@ -427,7 +440,27 @@ pub fn run_cleanup(state: CleanUpActorState, cleanup_number: Int) {
   })
   |> list.map(fn(processing_error) {
     snag.layer(processing_error, "Error cleaning up stale files")
-    |> snag.pretty_print
-    |> io.println
+    |> log_error
   })
+}
+
+fn log(message) {
+  io.println(message)
+  let _ = simplifile.append("backup_server.txt", message)
+  Nil
+}
+
+fn log_error(snag) {
+  io.println(snag.pretty_print(snag))
+  log(snag.line_print(snag))
+}
+
+fn log_if_error(res, context) {
+  case res {
+    Error(e) -> {
+      snag.layer(e, context) |> log_error
+      Error(Nil)
+    }
+    Ok(v) -> Ok(v)
+  }
 }
