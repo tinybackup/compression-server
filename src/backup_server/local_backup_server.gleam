@@ -26,6 +26,7 @@ import tempo/datetime
 import tempo/duration
 import tempo/naive_datetime
 import tempo/offset
+import tempo/time
 
 pub const file_hash_key = <<"8027f33215eaaba5">>
 
@@ -294,45 +295,42 @@ pub fn get_backup_path(base_dir base_dir, with file_hash, targeting target_size)
 
 /// We have no way to determine if the file is a favorite or not in
 /// this simple backup server
-pub fn determine_date(for file, at path) {
+pub fn determine_date(for file_bits, at path) {
   // Try to get the date from the exif data first
-  use _ <- result.try_recover(
-    {
-      use exif <- result.try(get_exif(from_file: file))
-      use exif <- result.try(dict.get(exif, Exif))
+  use _ <- result.try_recover({
+    use exif <- result.try(get_exif(from_file: file_bits))
+    use exif <- result.try(dict.get(exif, Exif))
 
-      use naive_datetime <- result.try({
-        use _ <- result.try_recover(dict.get(exif, Datetime))
-        use _ <- result.try_recover(dict.get(exif, DatetimeDigitized))
-        use _ <- result.try_recover(dict.get(exif, DatetimeDigitized))
-        use _ <- result.try_recover(dict.get(exif, DatetimeOriginal))
-        Error(Nil)
-      })
+    use naive_datetime_str <- result.try({
+      use _ <- result.try_recover(dict.get(exif, Datetime))
+      use _ <- result.try_recover(dict.get(exif, DatetimeDigitized))
+      use _ <- result.try_recover(dict.get(exif, DatetimeDigitized))
+      use _ <- result.try_recover(dict.get(exif, DatetimeOriginal))
+      Error(Nil)
+    })
 
-      let offset =
-        dict.get(exif, OffsetTime)
-        |> result.try_recover(fn(_) { dict.get(exif, OffsetTimeDigitized) })
-        |> result.try_recover(fn(_) { dict.get(exif, OffsetTimeOriginal) })
+    let offset_str =
+      dict.get(exif, OffsetTime)
+      |> result.try_recover(fn(_) { dict.get(exif, OffsetTimeDigitized) })
+      |> result.try_recover(fn(_) { dict.get(exif, OffsetTimeOriginal) })
+      |> result.map(Some)
+      |> result.unwrap(None)
+
+    use naive_datetime <- result.map(
+      naive_datetime.parse(naive_datetime_str, "YYYY:MM:DD HH:mm:ss")
+      |> result.nil_error,
+    )
+
+    let offset = case offset_str {
+      Some(offset_str) ->
+        offset.from_string(offset_str)
         |> result.map(Some)
         |> result.unwrap(None)
-
-      Ok(#(naive_datetime, offset))
+      None -> None
     }
-    |> result.try(fn(dts) {
-      use naive_datetime <- result.map(
-        naive_datetime.parse(dts.0, "YYYY:MM:DD HH:MM:SS") |> result.nil_error,
-      )
 
-      let offset = case dts.1 {
-        Some(offset_str) ->
-          offset.from_string(offset_str)
-          |> result.map(Some)
-          |> result.unwrap(None)
-        None -> None
-      }
-      #(naive_datetime, offset)
-    }),
-  )
+    #(naive_datetime, offset)
+  })
 
   // If there is no exif data, then try to get the date from the file path
   use _ <- result.try_recover({
@@ -342,6 +340,8 @@ pub fn determine_date(for file, at path) {
 
     case date, time {
       Some(date), Some(time) -> Ok(#(naive_datetime.new(date, time), offset))
+      Some(date), None ->
+        Ok(#(naive_datetime.new(date, time.literal("00:00")), offset))
       _, _ -> Error(Nil)
     }
   })
