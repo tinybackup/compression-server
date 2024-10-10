@@ -41,6 +41,11 @@ fn run() {
     |> snagx.from_error("Failed to get BACKUP_LOCATION env var"),
   )
 
+  use backup_mod_every_mins <- result.try(
+    env.get_int("BACKUP_MODIFIED_FILES_EVERY_MINS")
+    |> snagx.from_error("Failed to get BACKUP_MODIFIED_FILES_EVERY_MINS env var"),
+  )
+
   use _ <- result.try(
     list.map(backup_directories, fn(dir) {
       case simplifile.is_directory(dir) {
@@ -71,6 +76,7 @@ fn run() {
   use watcher_init_state <- result.try(local_server.init_watcher_actor(
     file_cache_conn,
     backup_directories,
+    backup_mod_every_mins,
   ))
 
   use _ <- result.try(

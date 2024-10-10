@@ -8,12 +8,14 @@ import filepath
 import filespy
 import gleam/bool
 import gleam/dict
+import gleam/erlang/process
 import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/otp/actor
 import gleam/result
+import gleam/set
 import gleam/string
 import gsiphash
 import repeatedly
@@ -28,7 +30,26 @@ import tempo/time
 
 pub const file_hash_key = <<"8027f33215eaaba5">>
 
-pub fn init_watcher_actor(conn, input_directory_paths) {
+pub type WatcherActorState {
+  WatcherActorState(
+    conn: process.Subject(file_cache.FileCacheRequest),
+    file_mod_watcher: process.Subject(FileModWatcherMsg),
+  )
+}
+
+pub fn init_watcher_actor(conn, input_directory_paths, backup_mod_every_mins) {
+  use file_mod_watcher <- result.try(
+    actor.start(
+      FileModWatcherActorState(conn:, paths: set.new()),
+      handle_mod_event,
+    )
+    |> snagx.from_error("Failed to start file mod watcher"),
+  )
+
+  repeatedly.call(backup_mod_every_mins * 60_000, Nil, fn(_, _) {
+    process.send(file_mod_watcher, BackupMods)
+  })
+
   use _ <- result.map(
     list.map(input_directory_paths, fn(directory_path) {
       reconcile_dir_with_db(directory_path, conn)
@@ -38,7 +59,7 @@ pub fn init_watcher_actor(conn, input_directory_paths) {
     |> snagx.from_error("Failed to init file system watcher"),
   )
 
-  conn
+  WatcherActorState(conn:, file_mod_watcher:)
 }
 
 /// Won't delete files from the backup that have been deleted since the
@@ -103,69 +124,111 @@ pub fn reconcile_dir_with_db(directory_path, conn) {
   Nil
 }
 
-pub fn handle_fs_event(change: filespy.Change(a), conn) {
-  let processing_results = case change {
-    filespy.Change(path:, events:) -> {
-      let file_dir = filepath.directory_name(path)
-      let file_name = filepath.base_name(path)
+pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
+  let #(_, processing_errors) =
+    case change {
+      filespy.Change(path:, events:) -> {
+        list.map(events, fn(event) {
+          case event {
+            filespy.Created -> {
+              io.println("Got created event for path " <> path)
+              let file_dir = filepath.directory_name(path)
+              let file_name = filepath.base_name(path)
 
-      list.map(events, fn(event) {
-        case event {
-          filespy.Created -> {
-            use hash <- result.try(hash_file(from_path: path))
+              use hash <- result.try(hash_file(from_path: path))
 
-            file_cache.add_new_file(conn, file_dir, file_name, hash)
+              file_cache.add_new_file(state.conn, file_dir, file_name, hash)
+            }
+
+            // Backing up based on mod events are delayed based on an interval
+            filespy.Modified -> {
+              process.send(state.file_mod_watcher, ModPath(path))
+              Ok(Nil)
+            }
+
+            filespy.Deleted -> {
+              io.println("Got deleted event for path " <> path)
+              let file_dir = filepath.directory_name(path)
+              let file_name = filepath.base_name(path)
+
+              file_cache.mark_file_as_stale(state.conn, file_dir, file_name)
+            }
+
+            _ -> Ok(Nil)
           }
+        })
+      }
 
-          filespy.Modified -> {
-            use hash <- result.try(hash_file(from_path: path))
-
-            use file_entry <- result.try(file_cache.get_file_entry(
-              conn,
-              file_dir,
-              file_name,
-              hash,
-            ))
-
-            // If there is already an entry for this file then the contents
-            // have not changed, so do nothing
-            use <- bool.guard(when: option.is_some(file_entry), return: Ok(Nil))
-
-            use _ <- result.try(file_cache.mark_file_as_stale(
-              conn,
-              file_dir,
-              file_name,
-            ))
-
-            file_cache.add_new_file(conn, file_dir, file_name, hash)
-          }
-
-          filespy.Deleted -> {
-            file_cache.mark_file_as_stale(conn, file_dir, file_name)
-          }
-
-          _ -> Ok(Nil)
-        }
-      })
+      _ -> []
     }
-
-    _ -> []
-  }
+    |> result.partition
 
   // Log any errors that occured while processing the files
-  processing_results
-  |> list.filter_map(fn(res) {
-    case res {
-      Error(e) -> Ok(e)
-      Ok(_) -> Error(Nil)
-    }
-  })
-  |> list.map(fn(processing_error) {
+  list.map(processing_errors, fn(processing_error) {
     snag.layer(processing_error, "Error processing file in watched directory")
     |> log_error
   })
 
-  actor.continue(conn)
+  actor.continue(state)
+}
+
+pub type FileModWatcherActorState {
+  FileModWatcherActorState(
+    conn: process.Subject(file_cache.FileCacheRequest),
+    paths: set.Set(String),
+  )
+}
+
+pub type FileModWatcherMsg {
+  ModPath(String)
+  BackupMods
+}
+
+fn handle_mod_event(msg, state: FileModWatcherActorState) {
+  let paths = case msg {
+    ModPath(path) -> set.insert(state.paths, path)
+    BackupMods -> {
+      let #(_, processing_errors) =
+        set.to_list(state.paths)
+        |> list.map(fn(path) {
+          io.println("Got created event for path " <> path)
+
+          let file_dir = filepath.directory_name(path)
+          let file_name = filepath.base_name(path)
+
+          use hash <- result.try(hash_file(from_path: path))
+
+          use file_entry <- result.try(file_cache.get_file_entry(
+            state.conn,
+            file_dir,
+            file_name,
+            hash,
+          ))
+
+          // If there is already an entry for this file then the contents
+          // have not changed, so do nothing
+          use <- bool.guard(when: option.is_some(file_entry), return: Ok(Nil))
+
+          use _ <- result.try(file_cache.mark_file_as_stale(
+            state.conn,
+            file_dir,
+            file_name,
+          ))
+
+          file_cache.add_new_file(state.conn, file_dir, file_name, hash)
+        })
+        |> result.partition
+
+      list.map(processing_errors, fn(e) {
+        snag.layer(e, "Error processing modified file needing backup")
+        |> log_error
+      })
+
+      set.new()
+    }
+  }
+
+  actor.continue(FileModWatcherActorState(..state, paths:))
 }
 
 fn hash_file(from_path path) {
@@ -184,37 +247,39 @@ fn hash_file(from_path path) {
 
 pub type BackupActorState {
   BackupActorState(
+    file_cache_conn: process.Subject(file_cache.FileCacheRequest),
     backup_target_size: types.TargetSize,
     backup_base_path: String,
   )
 }
 
 pub fn start_backup_repeater(
-  file_cache,
+  file_cache_conn,
   backup_every_mins backup_every_mins,
   backup_base_path backup_base_path,
   backup_target_size backup_target_size,
 ) {
-  let state = BackupActorState(backup_target_size:, backup_base_path:)
+  let state =
+    BackupActorState(file_cache_conn:, backup_target_size:, backup_base_path:)
 
   repeatedly.call(backup_every_mins * 60_000, state, fn(s, n) {
-    run_backup(s, file_cache, n) |> log_if_error("Failed to process backup")
+    run_backup(s, n) |> log_if_error("Failed to process backup")
   })
 }
 
-pub fn run_backup(state: BackupActorState, conn, backup_number) {
+pub fn run_backup(state: BackupActorState, backup_number) {
   log("Running backup process #" <> int.to_string(backup_number))
 
   use files_needing_backup <- result.map(file_cache.get_files_needing_backup(
-    conn,
+    state.file_cache_conn,
   ))
 
-  let processing_results =
+  let #(_, processing_errors) =
     list.map(files_needing_backup, fn(file_needing_backup) {
       use _ <- result.try_recover({
         // Mark the file as processing
         use _ <- result.try(file_cache.mark_file_as_processing(
-          conn,
+          state.file_cache_conn,
           file_needing_backup.file_dir,
           file_needing_backup.file_name,
         ))
@@ -279,7 +344,7 @@ pub fn run_backup(state: BackupActorState, conn, backup_number) {
         )
 
         file_cache.mark_file_as_backed_up(
-          conn,
+          state.file_cache_conn,
           file_needing_backup.file_dir,
           file_needing_backup.file_name,
         )
@@ -287,24 +352,20 @@ pub fn run_backup(state: BackupActorState, conn, backup_number) {
 
       // If this failed, then mark the file as failed
       file_cache.mark_file_as_failed(
-        conn,
+        state.file_cache_conn,
         file_needing_backup.file_dir,
         file_needing_backup.file_name,
       )
     })
+    |> result.partition
 
   // Log any errors that occured while processing the files
-  processing_results
-  |> list.filter_map(fn(res) {
-    case res {
-      Error(e) -> Ok(e)
-      Ok(_) -> Error(Nil)
-    }
-  })
-  |> list.map(fn(processing_error) {
+  list.map(processing_errors, fn(processing_error) {
     snag.layer(processing_error, "Error processing file needing backup")
     |> log_error
   })
+
+  state
 }
 
 pub fn get_backup_path(base_dir base_dir, with file_hash, targeting target_size) {
@@ -398,29 +459,35 @@ fn get_exif(
 ) -> Result(dict.Dict(ExifKey, dict.Dict(ExifKey, String)), Nil)
 
 pub type CleanUpActorState {
-  CleanUpActorState(delete_when_older_than: tempo.Duration)
+  CleanUpActorState(
+    file_cache_conn: process.Subject(file_cache.FileCacheRequest),
+    delete_when_older_than: tempo.Duration,
+  )
 }
 
 const one_day = 86_400_000
 
 pub fn start_cleanup_repeater(
-  conn,
+  file_cache_conn,
   delete_when_older_than_days delete_when_older_than_days,
 ) {
   let state =
-    CleanUpActorState(delete_when_older_than: duration.days(
-      delete_when_older_than_days,
-    ))
+    CleanUpActorState(
+      file_cache_conn:,
+      delete_when_older_than: duration.days(delete_when_older_than_days),
+    )
 
   repeatedly.call(one_day, state, fn(s, n) {
-    run_cleanup(s, conn, n) |> log_if_error("Failed to process cleanup")
+    run_cleanup(s, n) |> log_if_error("Failed to process cleanup")
   })
 }
 
-pub fn run_cleanup(state: CleanUpActorState, conn, cleanup_number: Int) {
+pub fn run_cleanup(state: CleanUpActorState, cleanup_number: Int) {
   log("Running cleanup process #" <> int.to_string(cleanup_number))
 
-  use stale_files <- result.map(file_cache.get_stale_files(conn))
+  use stale_files <- result.map(file_cache.get_stale_files(
+    state.file_cache_conn,
+  ))
 
   let processing_results =
     list.filter(stale_files, fn(stale_file) {
@@ -442,7 +509,7 @@ pub fn run_cleanup(state: CleanUpActorState, conn, cleanup_number: Int) {
       )
 
       file_cache.mark_file_as_deleted(
-        conn,
+        state.file_cache_conn,
         overly_stale_file.file_dir,
         overly_stale_file.file_name,
       )
@@ -460,6 +527,8 @@ pub fn run_cleanup(state: CleanUpActorState, conn, cleanup_number: Int) {
     snag.layer(processing_error, "Error cleaning up stale files")
     |> log_error
   })
+
+  state
 }
 
 fn log(message) {
