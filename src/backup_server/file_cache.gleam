@@ -2,6 +2,7 @@ import ext/snagx
 import filepath
 import gleam/dynamic
 import gleam/erlang/process
+import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/otp/actor
@@ -80,8 +81,8 @@ pub type FileCacheRequest {
 
 pub const db_timeout = 10_000_000
 
-pub fn start() {
-  use conn <- result.try(connect_to_files_db(read_only: False))
+pub fn start(at backup_location) {
+  use conn <- result.try(connect_to_files_db(backup_location))
 
   actor.start(conn, handle_msg)
   |> snagx.from_error("Unable to start file cache actor")
@@ -424,8 +425,6 @@ fn file_entry_decoder(dy) {
   )(dy)
 }
 
-const files_db_path = "data/files.db"
-
 const files_sql_columns = "file_dir, file_name, hash, status, entry_mod_time"
 
 const create_files_table_stmt = "
@@ -438,18 +437,17 @@ CREATE TABLE IF NOT EXISTS files (
   PRIMARY KEY (file_dir, file_name, hash)
 )"
 
-fn connect_to_files_db(read_only read_only: Bool) {
-  let _ =
-    simplifile.create_directory_all(filepath.directory_name(files_db_path))
-
-  let mode = case read_only {
-    True -> "?mode=ro"
-    False -> ""
+fn connect_to_files_db(path) {
+  case simplifile.is_directory(path) {
+    Ok(True) -> io.println("Using already existing backup location " <> path)
+    _ -> io.println("Creating backup location " <> path)
   }
 
+  let _ = simplifile.create_directory_all(path)
+
   use conn <- result.map(
-    sqlight.open("file:" <> files_db_path <> mode)
-    |> snagx.from_error("Failed to connect to file cache db " <> files_db_path),
+    sqlight.open("file:" <> path <> "/files.db")
+    |> snagx.from_error("Failed to connect to file cache db " <> path),
   )
 
   let _ = sqlight.exec(create_files_table_stmt, on: conn)

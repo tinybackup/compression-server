@@ -15,7 +15,6 @@ import gleam/option.{None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
-import glenvy/env
 import gsiphash
 import repeatedly
 import simplifile
@@ -29,14 +28,9 @@ import tempo/time
 
 pub const file_hash_key = <<"8027f33215eaaba5">>
 
-pub fn init_watcher_actor(directory_paths) {
-  use conn <- result.try(
-    file_cache.start()
-    |> snagx.from_error("Failed to init file system watcher"),
-  )
-
+pub fn init_watcher_actor(conn, input_directory_paths) {
   use _ <- result.map(
-    list.map(directory_paths, fn(directory_path) {
+    list.map(input_directory_paths, fn(directory_path) {
       reconcile_dir_with_db(directory_path, conn)
     })
     |> result.all
@@ -189,26 +183,22 @@ fn hash_file(from_path path) {
 }
 
 pub type BackupActorState {
-  BackupActorState(target_size: types.TargetSize, backup_base_path: String)
+  BackupActorState(
+    backup_target_size: types.TargetSize,
+    backup_base_path: String,
+  )
 }
 
-pub fn start_backup_repeater(backup_every_mins) {
-  use conn <- result.map(file_cache.start())
-
-  use target_size <- result.try(
-    env.get("BACKUP_FILE_SIZE", types.string_to_target_size)
-    |> snagx.from_error("Failed to get BACKUP_FILE_SIZE env var"),
-  )
-
-  use backup_base_path <- result.map(
-    env.get_string("BACKUP_LOCATION")
-    |> snagx.from_error("Failed to get BACKUP_LOCATION env var"),
-  )
-
-  let state = BackupActorState(target_size:, backup_base_path:)
+pub fn start_backup_repeater(
+  file_cache,
+  backup_every_mins backup_every_mins,
+  backup_base_path backup_base_path,
+  backup_target_size backup_target_size,
+) {
+  let state = BackupActorState(backup_target_size:, backup_base_path:)
 
   repeatedly.call(backup_every_mins * 60_000, state, fn(s, n) {
-    run_backup(s, conn, n) |> log_if_error("Failed to process backup")
+    run_backup(s, file_cache, n) |> log_if_error("Failed to process backup")
   })
 }
 
@@ -251,7 +241,8 @@ pub fn run_backup(state: BackupActorState, conn, backup_number) {
 
         let is_favorite = False
 
-        let config = types.get_image_config(state.target_size, is_favorite:)
+        let config =
+          types.get_image_config(state.backup_target_size, is_favorite:)
 
         let user_metadata = ""
 
@@ -270,19 +261,27 @@ pub fn run_backup(state: BackupActorState, conn, backup_number) {
           get_backup_path(
             base_dir: state.backup_base_path,
             with: file_needing_backup.hash,
-            targeting: state.target_size,
+            targeting: state.backup_target_size,
           )
 
         let _ =
           filepath.directory_name(backup_file_path)
           |> simplifile.create_directory_all
 
-        simplifile.write_bits(backup_image, to: backup_file_path)
-        |> snagx.from_simplifile(
-          "Failed to write backup file "
-          <> backup_file_path
-          <> " for "
-          <> file_path,
+        use Nil <- result.try(
+          simplifile.write_bits(backup_image, to: backup_file_path)
+          |> snagx.from_simplifile(
+            "Failed to write backup file "
+            <> backup_file_path
+            <> " for "
+            <> file_path,
+          ),
+        )
+
+        file_cache.mark_file_as_backed_up(
+          conn,
+          file_needing_backup.file_dir,
+          file_needing_backup.file_name,
         )
       })
 
@@ -404,9 +403,10 @@ pub type CleanUpActorState {
 
 const one_day = 86_400_000
 
-pub fn start_cleanup_repeater(delete_when_older_than_days) {
-  use conn <- result.map(file_cache.start())
-
+pub fn start_cleanup_repeater(
+  conn,
+  delete_when_older_than_days delete_when_older_than_days,
+) {
   let state =
     CleanUpActorState(delete_when_older_than: duration.days(
       delete_when_older_than_days,
