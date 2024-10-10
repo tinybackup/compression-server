@@ -49,7 +49,7 @@ pub fn determine_datetime_from_sytem_date_test() {
 pub fn add_new_file_test() {
   file_cache.wipe_test_db()
 
-  let assert Ok(conn) = file_cache.connect_to_test_files_db()
+  let assert Ok(conn) = file_cache.start_test()
 
   file_cache.add_new_file(conn, "test/input", "photo.jpg", "1fd7c5a4")
   |> should.equal(Ok(Nil))
@@ -63,7 +63,7 @@ pub fn add_new_file_test() {
 
 pub fn mark_file_as_stale_test() {
   file_cache.wipe_test_db()
-  let assert Ok(conn) = file_cache.connect_to_test_files_db()
+  let assert Ok(conn) = file_cache.start_test()
 
   file_cache.add_new_file(conn, "test/input", "photo.jpg", "1fd7c5a4")
   |> should.equal(Ok(Nil))
@@ -81,7 +81,7 @@ pub fn mark_file_as_stale_test() {
 pub fn get_files_needing_backup_test() {
   file_cache.wipe_test_db()
 
-  let assert Ok(conn) = file_cache.connect_to_test_files_db()
+  let assert Ok(conn) = file_cache.start_test()
 
   let assert Ok(files) = file_cache.get_files_needing_backup(conn)
 

@@ -37,6 +37,8 @@ fn run() {
     simplifile.create_directory_all(dir)
   })
 
+  // todo reset processing files
+
   use watcher_init_state <- result.try(local_server.init_watcher_actor(
     backup_directories,
   ))

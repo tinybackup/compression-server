@@ -20,7 +20,6 @@ import gsiphash
 import repeatedly
 import simplifile
 import snag
-import sqlight
 import tempo
 import tempo/datetime
 import tempo/duration
@@ -30,14 +29,10 @@ import tempo/time
 
 pub const file_hash_key = <<"8027f33215eaaba5">>
 
-pub type WatcherActorState {
-  WatcherActorState(conn: sqlight.Connection)
-}
-
 pub fn init_watcher_actor(directory_paths) {
   use conn <- result.try(
-    file_cache.connect_to_files_db(read_only: False)
-    |> snagx.from_error("Failed to start file system watcher"),
+    file_cache.start()
+    |> snagx.from_error("Failed to init file system watcher"),
   )
 
   use _ <- result.map(
@@ -46,10 +41,10 @@ pub fn init_watcher_actor(directory_paths) {
     })
     |> result.all
     |> snag.context("Failed to reconcile directories with db")
-    |> snagx.from_error("Failed to start file system watcher"),
+    |> snagx.from_error("Failed to init file system watcher"),
   )
 
-  WatcherActorState(conn: conn)
+  conn
 }
 
 /// Won't delete files from the backup that have been deleted since the
@@ -114,7 +109,7 @@ pub fn reconcile_dir_with_db(directory_path, conn) {
   Nil
 }
 
-pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
+pub fn handle_fs_event(change: filespy.Change(a), conn) {
   let processing_results = case change {
     filespy.Change(path:, events:) -> {
       let file_dir = filepath.directory_name(path)
@@ -125,14 +120,14 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
           filespy.Created -> {
             use hash <- result.try(hash_file(from_path: path))
 
-            file_cache.add_new_file(state.conn, file_dir, file_name, hash)
+            file_cache.add_new_file(conn, file_dir, file_name, hash)
           }
 
           filespy.Modified -> {
             use hash <- result.try(hash_file(from_path: path))
 
             use file_entry <- result.try(file_cache.get_file_entry(
-              state.conn,
+              conn,
               file_dir,
               file_name,
               hash,
@@ -143,16 +138,16 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
             use <- bool.guard(when: option.is_some(file_entry), return: Ok(Nil))
 
             use _ <- result.try(file_cache.mark_file_as_stale(
-              state.conn,
+              conn,
               file_dir,
               file_name,
             ))
 
-            file_cache.add_new_file(state.conn, file_dir, file_name, hash)
+            file_cache.add_new_file(conn, file_dir, file_name, hash)
           }
 
           filespy.Deleted -> {
-            file_cache.mark_file_as_stale(state.conn, file_dir, file_name)
+            file_cache.mark_file_as_stale(conn, file_dir, file_name)
           }
 
           _ -> Ok(Nil)
@@ -176,7 +171,7 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
     |> log_error
   })
 
-  actor.continue(state)
+  actor.continue(conn)
 }
 
 fn hash_file(from_path path) {
@@ -198,7 +193,7 @@ pub type BackupActorState {
 }
 
 pub fn start_backup_repeater(backup_every_mins) {
-  use conn <- result.map(file_cache.connect_to_files_db(read_only: True))
+  use conn <- result.map(file_cache.start())
 
   use target_size <- result.try(
     env.get("BACKUP_FILE_SIZE", types.string_to_target_size)
@@ -217,11 +212,7 @@ pub fn start_backup_repeater(backup_every_mins) {
   })
 }
 
-pub fn run_backup(
-  state: BackupActorState,
-  conn: sqlight.Connection,
-  backup_number: Int,
-) {
+pub fn run_backup(state: BackupActorState, conn, backup_number) {
   log("Running backup process #" <> int.to_string(backup_number))
 
   use files_needing_backup <- result.map(file_cache.get_files_needing_backup(
@@ -414,7 +405,7 @@ pub type CleanUpActorState {
 const one_day = 86_400_000
 
 pub fn start_cleanup_repeater(delete_when_older_than_days) {
-  use conn <- result.map(file_cache.connect_to_files_db(read_only: True))
+  use conn <- result.map(file_cache.start())
 
   let state =
     CleanUpActorState(delete_when_older_than: duration.days(
