@@ -554,13 +554,13 @@ pub fn run_cleanup(
 
 fn log(message) {
   io.println(message)
-  let _ = simplifile.append("backup_server.txt", message)
+  let _ = simplifile.append("backup_server.txt", message <> "\n")
   Nil
 }
 
 fn log_error(snag) {
   io.println(snag.pretty_print(snag))
-  let _ = simplifile.append("backup_server.txt", snag.line_print(snag))
+  let _ = simplifile.append("backup_server.txt", snag.line_print(snag) <> "\n")
   Nil
 }
 
