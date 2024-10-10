@@ -37,7 +37,7 @@ pub type WatcherActorState {
 pub fn init_watcher_actor(directory_paths) {
   use conn <- result.try(
     file_cache.connect_to_files_db(read_only: False)
-    |> log_if_error("Failed to start file system watcher"),
+    |> snagx.from_error("Failed to start file system watcher"),
   )
 
   use _ <- result.map(
@@ -46,7 +46,7 @@ pub fn init_watcher_actor(directory_paths) {
     })
     |> result.all
     |> snag.context("Failed to reconcile directories with db")
-    |> log_if_error("Failed to start file system watcher"),
+    |> snagx.from_error("Failed to start file system watcher"),
   )
 
   WatcherActorState(conn: conn)
@@ -110,10 +110,11 @@ pub fn reconcile_dir_with_db(directory_path, conn) {
     |> snag.context("Failed to add new files to db"),
   )
 
+  io.println("Reconciled directories with db")
   Nil
 }
 
-pub fn handle_fs_event(change: filespy.Change(String), state: WatcherActorState) {
+pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
   let processing_results = case change {
     filespy.Change(path:, events:) -> {
       let file_dir = filepath.directory_name(path)
@@ -189,28 +190,28 @@ fn hash_file(from_path path) {
     |> snagx.from_error("Failed to hash file " <> path),
   )
 
-  hash
+  hash |> int.to_base16 |> string.lowercase
 }
 
 pub type BackupActorState {
-  BackupActorState(conn: sqlight.Connection, face_detection_uri: String)
+  BackupActorState(face_detection_uri: String)
 }
 
 pub fn start_backup_repeater(face_detection_uri, backup_every_mins) {
   use conn <- result.map(file_cache.connect_to_files_db(read_only: True))
 
-  let state = BackupActorState(conn:, face_detection_uri:)
+  let state = BackupActorState(face_detection_uri:)
 
   repeatedly.call(backup_every_mins * 60_000, state, fn(s, n) {
-    run_backup(s, n) |> log_if_error("Failed to process backup")
+    run_backup(s, conn, n) |> log_if_error("Failed to process backup")
   })
 }
 
-pub fn run_backup(state: BackupActorState, backup_number: Int) {
+pub fn run_backup(_, conn, backup_number: Int) {
   log("Running backup process #" <> int.to_string(backup_number))
 
   use files_needing_backup <- result.map(file_cache.get_files_needing_backup(
-    state.conn,
+    conn,
   ))
 
   let processing_results =
@@ -269,6 +270,10 @@ pub fn run_backup(state: BackupActorState, backup_number: Int) {
           targeting: target_size,
         )
 
+      let _ =
+        filepath.directory_name(backup_file_path)
+        |> simplifile.create_directory_all
+
       simplifile.write_bits(backup_image, to: backup_file_path)
       |> snagx.from_simplifile(
         "Failed to write backup file "
@@ -293,11 +298,9 @@ pub fn run_backup(state: BackupActorState, backup_number: Int) {
 }
 
 pub fn get_backup_path(base_dir base_dir, with file_hash, targeting target_size) {
-  let hash_str = file_hash |> int.to_base16 |> string.lowercase
-
-  string.to_graphemes(hash_str)
+  string.to_graphemes(file_hash)
   |> list.take(3)
-  |> list.append([hash_str])
+  |> list.append([file_hash])
   |> list.fold(from: base_dir, with: filepath.join)
   |> string.append(types.get_compressed_image_extension(target_size))
 }
@@ -452,7 +455,8 @@ fn log(message) {
 
 fn log_error(snag) {
   io.println(snag.pretty_print(snag))
-  log(snag.line_print(snag))
+  let _ = simplifile.append("backup_server.txt", snag.line_print(snag))
+  Nil
 }
 
 fn log_if_error(res, context) {

@@ -1,7 +1,6 @@
 import ext/snagx
 import filepath
 import gleam/dynamic
-import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
@@ -15,7 +14,7 @@ pub type FileEntry {
   FileEntry(
     file_dir: String,
     file_name: String,
-    hash: Int,
+    hash: String,
     status: FileStatus,
     entry_mod_time: tempo.DateTime,
   )
@@ -37,7 +36,7 @@ pub fn add_new_file(conn, file_dir, file_name, hash) {
       <> [
       "'" <> file_dir <> "'",
       "'" <> file_name <> "'",
-      int.to_string(hash),
+      "'" <> hash <> "'",
       "'NEW'",
       "'" <> datetime.now_local() |> datetime.to_string <> "'",
     ]
@@ -167,8 +166,9 @@ pub fn get_file_entry(conn, file_dir, file_name, hash) {
         <> file_dir
         <> "' AND file_name = '"
         <> file_name
-        <> "' AND hash = "
-        <> int.to_string(hash),
+        <> "' AND hash = '"
+        <> hash
+        <> "'",
       on: conn,
       with: [],
       expecting: file_entry_decoder,
@@ -210,7 +210,7 @@ fn file_entry_decoder(dy) {
     FileEntry,
     dynamic.element(0, dynamic.string),
     dynamic.element(1, dynamic.string),
-    dynamic.element(2, dynamic.int),
+    dynamic.element(2, dynamic.string),
     dynamic.element(3, fn(dy) {
       use str <- result.try(dynamic.string(dy))
       string_to_file_status(str)
@@ -228,7 +228,7 @@ const create_files_table_stmt = "
 CREATE TABLE IF NOT EXISTS files (
   file_dir TEXT NOT NULL,
   file_name TEXT NOT NULL,
-  hash INTEGER NOT NULL,
+  hash TEXT NOT NULL,
   status TEXT NOT NULL,
   entry_mod_time TEXT NOT NULL,
   PRIMARY KEY (file_dir, file_name, hash)
@@ -251,4 +251,31 @@ pub fn connect_to_files_db(read_only read_only: Bool) {
   let _ = sqlight.exec(create_files_table_stmt, on: conn)
 
   conn
+}
+
+pub fn connect_to_test_files_db() {
+  let files_db_path = "data/files_test.db"
+  let _ =
+    simplifile.create_directory_all(filepath.directory_name(files_db_path))
+
+  use conn <- result.map(
+    sqlight.open("file:" <> files_db_path)
+    |> snagx.from_error("Failed to connect to file cache db " <> files_db_path),
+  )
+
+  let _ = sqlight.exec(create_files_table_stmt, on: conn)
+
+  conn
+}
+
+pub fn wipe_test_db() {
+  let files_db_path = "data/files_test.db"
+  let _ =
+    simplifile.create_directory_all(filepath.directory_name(files_db_path))
+
+  let assert Ok(conn) = sqlight.open("file:" <> files_db_path)
+
+  let _ = sqlight.exec("DROP TABLE files", on: conn)
+
+  Nil
 }
