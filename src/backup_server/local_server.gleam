@@ -140,6 +140,16 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
               file_cache.add_new_file(state.conn, file_dir, file_name, hash)
             }
 
+            filespy.Renamed -> {
+              io.println("Got Renamed event for path " <> path)
+              let file_dir = filepath.directory_name(path)
+              let file_name = filepath.base_name(path)
+
+              use hash <- result.try(hash_file(from_path: path))
+
+              file_cache.add_new_file(state.conn, file_dir, file_name, hash)
+            }
+
             // Backing up based on mod events are delayed based on an interval
             filespy.Modified -> {
               process.send(state.file_mod_watcher, ModPath(path))
@@ -245,33 +255,33 @@ fn hash_file(from_path path) {
   hash |> int.to_base16 |> string.lowercase
 }
 
-pub type BackupActorState {
-  BackupActorState(
-    file_cache_conn: process.Subject(file_cache.FileCacheRequest),
-    backup_target_size: types.TargetSize,
-    backup_base_path: String,
-  )
-}
-
 pub fn start_backup_repeater(
-  file_cache_conn,
+  file_cache_conn file_cache_conn,
   backup_every_mins backup_every_mins,
   backup_base_path backup_base_path,
   backup_target_size backup_target_size,
 ) {
-  let state =
-    BackupActorState(file_cache_conn:, backup_target_size:, backup_base_path:)
-
-  repeatedly.call(backup_every_mins * 60_000, state, fn(s, n) {
-    run_backup(s, n) |> log_if_error("Failed to process backup")
+  repeatedly.call(backup_every_mins * 60_000, Nil, fn(_, n) {
+    run_backup(
+      file_cache_conn:,
+      backup_target_size:,
+      backup_base_path:,
+      backup_number: n,
+    )
+    |> log_if_error("Failed to process backup")
   })
 }
 
-pub fn run_backup(state: BackupActorState, backup_number) {
+pub fn run_backup(
+  file_cache_conn file_cache_conn,
+  backup_target_size backup_target_size,
+  backup_base_path backup_base_path,
+  backup_number backup_number,
+) {
   log("Running backup process #" <> int.to_string(backup_number))
 
   use files_needing_backup <- result.map(file_cache.get_files_needing_backup(
-    state.file_cache_conn,
+    file_cache_conn,
   ))
 
   let #(_, processing_errors) =
@@ -279,7 +289,7 @@ pub fn run_backup(state: BackupActorState, backup_number) {
       use _ <- result.try_recover({
         // Mark the file as processing
         use _ <- result.try(file_cache.mark_file_as_processing(
-          state.file_cache_conn,
+          file_cache_conn,
           file_needing_backup.file_dir,
           file_needing_backup.file_name,
         ))
@@ -306,8 +316,7 @@ pub fn run_backup(state: BackupActorState, backup_number) {
 
         let is_favorite = False
 
-        let config =
-          types.get_image_config(state.backup_target_size, is_favorite:)
+        let config = types.get_image_config(backup_target_size, is_favorite:)
 
         let user_metadata = ""
 
@@ -324,9 +333,9 @@ pub fn run_backup(state: BackupActorState, backup_number) {
 
         let backup_file_path =
           get_backup_path(
-            base_dir: state.backup_base_path,
+            base_dir: backup_base_path,
             with: file_needing_backup.hash,
-            targeting: state.backup_target_size,
+            targeting: backup_target_size,
           )
 
         let _ =
@@ -344,7 +353,7 @@ pub fn run_backup(state: BackupActorState, backup_number) {
         )
 
         file_cache.mark_file_as_backed_up(
-          state.file_cache_conn,
+          file_cache_conn,
           file_needing_backup.file_dir,
           file_needing_backup.file_name,
         )
@@ -352,7 +361,7 @@ pub fn run_backup(state: BackupActorState, backup_number) {
 
       // If this failed, then mark the file as failed
       file_cache.mark_file_as_failed(
-        state.file_cache_conn,
+        file_cache_conn,
         file_needing_backup.file_dir,
         file_needing_backup.file_name,
       )
@@ -365,7 +374,7 @@ pub fn run_backup(state: BackupActorState, backup_number) {
     |> log_error
   })
 
-  state
+  Nil
 }
 
 pub fn get_backup_path(base_dir base_dir, with file_hash, targeting target_size) {
@@ -460,7 +469,8 @@ fn get_exif(
 
 pub type CleanUpActorState {
   CleanUpActorState(
-    file_cache_conn: process.Subject(file_cache.FileCacheRequest),
+    backup_base_path: String,
+    backup_target_size: types.TargetSize,
     delete_when_older_than: tempo.Duration,
   )
 }
@@ -468,67 +478,78 @@ pub type CleanUpActorState {
 const one_day = 86_400_000
 
 pub fn start_cleanup_repeater(
-  file_cache_conn,
+  file_cache_conn file_cache_conn,
+  backup_base_path backup_base_path,
+  backup_target_size backup_target_size,
   delete_when_older_than_days delete_when_older_than_days,
 ) {
-  let state =
-    CleanUpActorState(
+  repeatedly.call(one_day, Nil, fn(_, n) {
+    run_cleanup(
       file_cache_conn:,
+      backup_base_path:,
+      backup_target_size:,
       delete_when_older_than: duration.days(delete_when_older_than_days),
+      cleanup_number: n,
     )
-
-  repeatedly.call(one_day, state, fn(s, n) {
-    run_cleanup(s, n) |> log_if_error("Failed to process cleanup")
+    |> log_if_error("Failed to process cleanup")
   })
 }
 
-pub fn run_cleanup(state: CleanUpActorState, cleanup_number: Int) {
+pub fn run_cleanup(
+  file_cache_conn file_cache_conn,
+  backup_base_path backup_base_path,
+  backup_target_size backup_target_size,
+  delete_when_older_than delete_when_older_than,
+  cleanup_number cleanup_number: Int,
+) {
   log("Running cleanup process #" <> int.to_string(cleanup_number))
 
-  use stale_files <- result.map(file_cache.get_stale_files(
-    state.file_cache_conn,
-  ))
+  use stale_files <- result.map(file_cache.get_stale_files(file_cache_conn))
 
-  let processing_results =
+  let #(_, processing_errors) =
     list.filter(stale_files, fn(stale_file) {
       stale_file.entry_mod_time
       |> datetime.is_earlier(
         than: datetime.now_local()
-        |> datetime.subtract(state.delete_when_older_than),
+        |> datetime.subtract(delete_when_older_than),
       )
     })
     |> list.map(fn(overly_stale_file) {
       let file_path =
-        filepath.join(overly_stale_file.file_dir, overly_stale_file.file_name)
+        get_backup_path(
+          base_dir: backup_base_path,
+          with: overly_stale_file.hash,
+          targeting: backup_target_size,
+        )
 
-      use _ <- result.try(
-        simplifile.delete(file_path)
-        |> snagx.from_simplifile(
-          "Unable to delete overly stale file " <> file_path,
-        ),
-      )
+      let _ = case overly_stale_file.status {
+        file_cache.BackedUp -> {
+          // If the file is not able to be deleted, then log it but continue
+          use e <- result.try_recover(simplifile.delete(file_path))
+          simplifile.describe_error(e)
+          |> snag.new
+          |> snag.layer("Unable to delete overly stale file " <> file_path)
+          |> log_error
+          Ok(Nil)
+        }
+        _ -> Ok(Nil)
+      }
 
       file_cache.mark_file_as_deleted(
-        state.file_cache_conn,
+        file_cache_conn,
         overly_stale_file.file_dir,
         overly_stale_file.file_name,
       )
     })
+    |> result.partition
 
   // Log any errors that occured while processing the files
-  processing_results
-  |> list.filter_map(fn(res) {
-    case res {
-      Error(e) -> Ok(e)
-      Ok(_) -> Error(Nil)
-    }
-  })
-  |> list.map(fn(processing_error) {
+  list.map(processing_errors, fn(processing_error) {
     snag.layer(processing_error, "Error cleaning up stale files")
     |> log_error
   })
 
-  state
+  Nil
 }
 
 fn log(message) {

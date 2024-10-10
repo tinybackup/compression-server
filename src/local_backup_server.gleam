@@ -43,7 +43,9 @@ fn run() {
 
   use backup_mod_every_mins <- result.try(
     env.get_int("BACKUP_MODIFIED_FILES_EVERY_MINS")
-    |> snagx.from_error("Failed to get BACKUP_MODIFIED_FILES_EVERY_MINS env var"),
+    |> snagx.from_error(
+      "Failed to get BACKUP_MODIFIED_FILES_EVERY_MINS env var",
+    ),
   )
 
   use _ <- result.try(
@@ -94,14 +96,16 @@ fn run() {
   )
 
   local_server.start_backup_repeater(
-    file_cache_conn,
+    file_cache_conn:,
     backup_every_mins: 1,
     backup_base_path:,
     backup_target_size:,
   )
 
   local_server.start_cleanup_repeater(
-    file_cache_conn,
+    file_cache_conn:,
+    backup_base_path:,
+    backup_target_size:,
     delete_when_older_than_days: 7,
   )
 

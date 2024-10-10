@@ -193,18 +193,28 @@ pub fn mark_file_as_deleted(conn, file_dir, file_name) {
 }
 
 fn do_mark_file_as_deleted(conn, file_dir, file_name) {
+  use _ <- result.try(
+    sqlight.exec("INSERT INTO deleted_files
+      SELECT * FROM files WHERE file_dir = '" <> file_dir <> "' AND file_name = '" <> file_name <> "'
+    ", on: conn)
+    |> snagx.from_error(
+      "Failed to insert deleted files into deleted_files table for "
+      <> file_dir
+      <> "/"
+      <> file_name,
+    ),
+  )
+
   sqlight.exec(
-    "UPDATE files SET status = 'DELETED', entry_mod_time = '"
-      <> datetime.now_local() |> datetime.to_string
-      <> "' WHERE file_dir = '"
+    "DELETE FROM files WHERE file_dir = '"
       <> file_dir
       <> "' AND file_name = '"
       <> file_name
-      <> "' AND status = 'BACKED_UP'",
+      <> "'",
     on: conn,
   )
   |> snagx.from_error(
-    "Failed to mark file as deleted in file cache db "
+    "Failed to delete deleted files in cache db "
     <> file_dir
     <> "/"
     <> file_name,
@@ -437,6 +447,16 @@ CREATE TABLE IF NOT EXISTS files (
   PRIMARY KEY (file_dir, file_name, hash)
 )"
 
+const create_deleted_files_table_stmt = "
+CREATE TABLE IF NOT EXISTS deleted_files (
+  file_dir TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  status TEXT NOT NULL,
+  entry_mod_time TEXT NOT NULL
+)
+"
+
 fn connect_to_files_db(path) {
   case simplifile.is_directory(path) {
     Ok(True) -> io.println("Using already existing backup location " <> path)
@@ -451,7 +471,7 @@ fn connect_to_files_db(path) {
   )
 
   let _ = sqlight.exec(create_files_table_stmt, on: conn)
-
+  let _ = sqlight.exec(create_deleted_files_table_stmt, on: conn)
   conn
 }
 
