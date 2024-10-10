@@ -194,20 +194,34 @@ fn hash_file(from_path path) {
 }
 
 pub type BackupActorState {
-  BackupActorState(face_detection_uri: String)
+  BackupActorState(target_size: types.TargetSize, backup_base_path: String)
 }
 
-pub fn start_backup_repeater(face_detection_uri, backup_every_mins) {
+pub fn start_backup_repeater(backup_every_mins) {
   use conn <- result.map(file_cache.connect_to_files_db(read_only: True))
 
-  let state = BackupActorState(face_detection_uri:)
+  use target_size <- result.try(
+    env.get("BACKUP_FILE_SIZE", types.string_to_target_size)
+    |> snagx.from_error("Failed to get BACKUP_FILE_SIZE env var"),
+  )
+
+  use backup_base_path <- result.map(
+    env.get_string("BACKUP_LOCATION")
+    |> snagx.from_error("Failed to get BACKUP_LOCATION env var"),
+  )
+
+  let state = BackupActorState(target_size:, backup_base_path:)
 
   repeatedly.call(backup_every_mins * 60_000, state, fn(s, n) {
     run_backup(s, conn, n) |> log_if_error("Failed to process backup")
   })
 }
 
-pub fn run_backup(_, conn, backup_number: Int) {
+pub fn run_backup(
+  state: BackupActorState,
+  conn: sqlight.Connection,
+  backup_number: Int,
+) {
   log("Running backup process #" <> int.to_string(backup_number))
 
   use files_needing_backup <- result.map(file_cache.get_files_needing_backup(
@@ -216,70 +230,76 @@ pub fn run_backup(_, conn, backup_number: Int) {
 
   let processing_results =
     list.map(files_needing_backup, fn(file_needing_backup) {
-      let file_path =
-        filepath.join(
+      use _ <- result.try_recover({
+        // Mark the file as processing
+        use _ <- result.try(file_cache.mark_file_as_processing(
+          conn,
           file_needing_backup.file_dir,
           file_needing_backup.file_name,
+        ))
+
+        let file_path =
+          filepath.join(
+            file_needing_backup.file_dir,
+            file_needing_backup.file_name,
+          )
+
+        use file <- result.try(
+          simplifile.read_bits(file_path)
+          |> snagx.from_simplifile("Failed to read file at " <> file_path),
         )
 
-      use target_size <- result.try(
-        env.get("BACKUP_FILE_SIZE", types.string_to_target_size)
-        |> snagx.from_error("Failed to get BACKUP_FILE_SIZE env var"),
-      )
+        use #(naive_datetime, offset) <- result.try(determine_date(
+          for: file,
+          at: file_path,
+        ))
 
-      use backup_base_path <- result.try(
-        env.get_string("BACKUP_LOCATION")
-        |> snagx.from_error("Failed to get BACKUP_LOCATION env var"),
-      )
+        use image <- result.try(image.from_bit_array(file))
 
-      use file <- result.try(
-        simplifile.read_bits(file_path)
-        |> snagx.from_simplifile("Failed to read file at " <> file_path),
-      )
+        use faces <- result.try(detect_faces.detect_faces(in: file))
 
-      use #(naive_datetime, offset) <- result.try(determine_date(
-        for: file,
-        at: file_path,
-      ))
+        let is_favorite = False
 
-      use image <- result.try(image.from_bit_array(file))
+        let config = types.get_image_config(state.target_size, is_favorite:)
 
-      use faces <- result.try(detect_faces.detect_faces(in: file))
+        let user_metadata = ""
 
-      let is_favorite = False
+        use backup_image <- result.try(compress.image(
+          image:,
+          naive_datetime:,
+          offset:,
+          config:,
+          original_file_path: file_path,
+          is_favorite:,
+          user_metadata:,
+          faces:,
+        ))
 
-      let config = types.get_image_config(target_size:, is_favorite:)
+        let backup_file_path =
+          get_backup_path(
+            base_dir: state.backup_base_path,
+            with: file_needing_backup.hash,
+            targeting: state.target_size,
+          )
 
-      let user_metadata = ""
+        let _ =
+          filepath.directory_name(backup_file_path)
+          |> simplifile.create_directory_all
 
-      use backup_image <- result.try(compress.image(
-        image:,
-        naive_datetime:,
-        offset:,
-        config:,
-        original_file_path: file_path,
-        is_favorite:,
-        user_metadata:,
-        faces:,
-      ))
-
-      let backup_file_path =
-        get_backup_path(
-          base_dir: backup_base_path,
-          with: file_needing_backup.hash,
-          targeting: target_size,
+        simplifile.write_bits(backup_image, to: backup_file_path)
+        |> snagx.from_simplifile(
+          "Failed to write backup file "
+          <> backup_file_path
+          <> " for "
+          <> file_path,
         )
+      })
 
-      let _ =
-        filepath.directory_name(backup_file_path)
-        |> simplifile.create_directory_all
-
-      simplifile.write_bits(backup_image, to: backup_file_path)
-      |> snagx.from_simplifile(
-        "Failed to write backup file "
-        <> backup_file_path
-        <> " for "
-        <> file_path,
+      // If this failed, then mark the file as failed
+      file_cache.mark_file_as_failed(
+        conn,
+        file_needing_backup.file_dir,
+        file_needing_backup.file_name,
       )
     })
 
@@ -388,10 +408,7 @@ fn get_exif(
 ) -> Result(dict.Dict(ExifKey, dict.Dict(ExifKey, String)), Nil)
 
 pub type CleanUpActorState {
-  CleanUpActorState(
-    conn: sqlight.Connection,
-    delete_when_older_than: tempo.Duration,
-  )
+  CleanUpActorState(delete_when_older_than: tempo.Duration)
 }
 
 const one_day = 86_400_000
@@ -400,20 +417,19 @@ pub fn start_cleanup_repeater(delete_when_older_than_days) {
   use conn <- result.map(file_cache.connect_to_files_db(read_only: True))
 
   let state =
-    CleanUpActorState(
-      conn:,
-      delete_when_older_than: duration.days(delete_when_older_than_days),
-    )
+    CleanUpActorState(delete_when_older_than: duration.days(
+      delete_when_older_than_days,
+    ))
 
   repeatedly.call(one_day, state, fn(s, n) {
-    run_cleanup(s, n) |> log_if_error("Failed to process cleanup")
+    run_cleanup(s, conn, n) |> log_if_error("Failed to process cleanup")
   })
 }
 
-pub fn run_cleanup(state: CleanUpActorState, cleanup_number: Int) {
+pub fn run_cleanup(state: CleanUpActorState, conn, cleanup_number: Int) {
   log("Running cleanup process #" <> int.to_string(cleanup_number))
 
-  use stale_files <- result.map(file_cache.get_stale_files(state.conn))
+  use stale_files <- result.map(file_cache.get_stale_files(conn))
 
   let processing_results =
     list.filter(stale_files, fn(stale_file) {
@@ -427,9 +443,17 @@ pub fn run_cleanup(state: CleanUpActorState, cleanup_number: Int) {
       let file_path =
         filepath.join(overly_stale_file.file_dir, overly_stale_file.file_name)
 
-      simplifile.delete(file_path)
-      |> snagx.from_simplifile(
-        "Unable to delete overly stale file " <> file_path,
+      use _ <- result.try(
+        simplifile.delete(file_path)
+        |> snagx.from_simplifile(
+          "Unable to delete overly stale file " <> file_path,
+        ),
+      )
+
+      file_cache.mark_file_as_deleted(
+        conn,
+        overly_stale_file.file_dir,
+        overly_stale_file.file_name,
       )
     })
 

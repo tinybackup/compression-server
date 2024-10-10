@@ -1,6 +1,5 @@
 import backup_server/local_server
 import ext/snagx
-import filepath
 import filespy
 import gleam/erlang/process
 import gleam/io
@@ -38,11 +37,6 @@ fn run() {
     simplifile.create_directory_all(dir)
   })
 
-  use face_detection_uri <- result.try(
-    env.get_string("FACE_DETECTION_SERVER_URL")
-    |> snagx.from_error("Failed to get FACE_DETECTION_SERVER_URL env var"),
-  )
-
   use watcher_init_state <- result.try(local_server.init_watcher_actor(
     backup_directories,
   ))
@@ -57,7 +51,7 @@ fn run() {
   )
 
   use _ <- result.try(
-    local_server.start_backup_repeater(face_detection_uri, 1)
+    local_server.start_backup_repeater(1)
     |> snagx.from_error("Failed to start backup repeater"),
   )
 

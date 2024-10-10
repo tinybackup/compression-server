@@ -26,6 +26,7 @@ pub type FileStatus {
   Failed
   BackedUp
   Stale
+  Deleted
 }
 
 pub fn add_new_file(conn, file_dir, file_name, hash) {
@@ -65,6 +66,25 @@ pub fn mark_file_as_stale(conn, file_dir, file_name) {
   )
   |> snagx.from_error(
     "Failed to mark file as stale in file cache db "
+    <> file_dir
+    <> "/"
+    <> file_name,
+  )
+}
+
+pub fn mark_file_as_deleted(conn, file_dir, file_name) {
+  sqlight.exec(
+    "UPDATE files SET status = 'DELETED', entry_mod_time = '"
+      <> datetime.now_local() |> datetime.to_string
+      <> "' WHERE file_dir = '"
+      <> file_dir
+      <> "' AND file_name = '"
+      <> file_name
+      <> "' AND status = 'BACKED_UP'",
+    on: conn,
+  )
+  |> snagx.from_error(
+    "Failed to mark file as deleted in file cache db "
     <> file_dir
     <> "/"
     <> file_name,
@@ -201,6 +221,7 @@ fn string_to_file_status(status: String) -> Result(FileStatus, Nil) {
     "FAILED" -> Ok(Failed)
     "BACKED_UP" -> Ok(BackedUp)
     "STALE" -> Ok(Stale)
+    "DELETED" -> Ok(Deleted)
     _ -> Error(Nil)
   }
 }
