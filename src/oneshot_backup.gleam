@@ -51,6 +51,8 @@ pub fn run() {
   )
 
   use files_needing_backup <- result.map({
+    use Nil <- result.try(file_cache.reset_processing_files(file_cache_conn))
+
     use files <- result.map(file_cache.get_files_needing_backup(file_cache_conn))
 
     list.filter(files, fn(entry) {

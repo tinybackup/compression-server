@@ -1,7 +1,9 @@
+import ansel
 import ansel/image
 import backup_server/file_cache
 import compression_server/compress
 import compression_server/lib/detect_faces
+import compression_server/lib/downsize
 import compression_server/types
 import ext/snagx
 import filepath
@@ -148,7 +150,14 @@ pub fn backup_file(
       hash,
     ))
 
-    use <- bool.guard(when: file_exists_in_backup, return: Ok(Nil))
+    use <- bool.lazy_guard(when: file_exists_in_backup, return: fn() {
+      file_cache.mark_file_as_backed_up(
+        file_cache_conn,
+        file_dir,
+        file_name,
+        hash,
+      )
+    })
 
     // Mark the file as processing
     use Nil <- result.try(file_cache.mark_file_as_processing(
@@ -164,11 +173,19 @@ pub fn backup_file(
 
     use image <- result.try(image.from_bit_array(file))
 
-    use faces <- result.try(detect_faces.detect_faces(in: file))
-
     let is_favorite = False
 
     let config = types.get_image_config(backup_target_size, is_favorite:)
+
+    use compatable_image_file <- result.try(
+      downsize.image_to(image, config.baseline_size)
+      |> result.map(image.to_bit_array(_, ansel.HEIC(
+        quality: 75,
+        keep_metadata: False,
+      ))),
+    )
+
+    use faces <- result.try(detect_faces.detect_faces(in: compatable_image_file))
 
     let user_metadata = ""
 

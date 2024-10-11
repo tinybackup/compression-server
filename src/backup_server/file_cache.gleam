@@ -350,7 +350,7 @@ fn do_get_file_entry(conn, file_dir, file_name) {
         <> file_dir
         <> "' AND file_name = '"
         <> file_name
-        <> "'",
+        <> "' ORDER BY rowid DESC LIMIT 1",
       on: conn,
       with: [],
       expecting: file_entry_decoder,
@@ -404,22 +404,18 @@ pub fn reset_processing_files(conn) {
 }
 
 fn do_reset_processing_files(conn) {
-  sqlight.exec("INSERT INTO files (
-      file_dir, 
-      file_name, 
-      file_mod_time, 
-      hash, 
-      status, 
-      entry_time
-    ) SELECT 
-      file_dir, 
-      file_name, 
-      file_mod_time, 
-      hash, 
-      'NEW', 
-      '" <> datetime.now_local() |> datetime.to_string <> "'
-    FROM files WHERE status = 'PROCESSING'", on: conn)
-  |> snagx.from_error("Failed to reset processing files in file cache db")
+  use entries <- result.try(get_file_entries(conn))
+
+  use _ <- result.map(
+    list.filter(entries, fn(entry) { entry.status == Processing })
+    |> list.map(fn(entry) {
+      do_mark_file_as(conn, entry.file_dir, entry.file_name, None, New)
+    })
+    |> result.all
+    |> snagx.from_error("Failed to reset processing files in file cache db"),
+  )
+
+  Nil
 }
 
 fn string_to_file_status(status: String) -> Result(FileStatus, Nil) {
