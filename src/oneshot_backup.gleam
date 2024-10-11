@@ -1,8 +1,10 @@
 import backup_server/backup
 import backup_server/file_cache
+import filepath
 import gleam/io
 import gleam/list
 import gleam/result
+import simplifile
 import snag
 
 pub fn main() {
@@ -33,25 +35,49 @@ pub fn run() {
 
   let new_files = list.flatten(new_files)
 
-  list.map(new_files, fn(new_file) {
-    let #(file_dir, file_name, file_mod_time) = new_file
+  use _ <- result.try(
+    list.map(new_files, fn(new_file) {
+      let #(file_dir, file_name, file_mod_time) = new_file
 
-    io.print("Backing up file " <> file_dir <> "/" <> file_name <> " ... ")
-
-    let backup_res = {
-      use Nil <- result.try(file_cache.add_new_file(
+      file_cache.add_new_file(
         file_cache_conn,
         file_dir,
         file_name,
         file_mod_time,
-      ))
+      )
+    })
+    |> result.all
+    |> snag.context("Failed to reconcile new files with db"),
+  )
 
+  use files_needing_backup <- result.map({
+    use files <- result.map(file_cache.get_files_needing_backup(file_cache_conn))
+
+    list.filter(files, fn(entry) {
+      let path = filepath.join(entry.file_dir, entry.file_name)
+      case simplifile.is_file(path) {
+        Error(_) -> {
+          io.println("Failed to read file " <> path)
+          False
+        }
+        Ok(False) -> False
+        Ok(True) -> True
+      }
+    })
+  })
+
+  list.map(files_needing_backup, fn(entry) {
+    let file_path = filepath.join(entry.file_dir, entry.file_name)
+
+    io.print("Backing up file " <> file_path <> " ... ")
+
+    let backup_res = {
       backup.backup_file(
         file_cache_conn,
         backup_base_path,
         backup_target_size,
-        file_dir,
-        file_name,
+        entry.file_dir,
+        entry.file_name,
       )
     }
 
