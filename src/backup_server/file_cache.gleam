@@ -18,7 +18,8 @@ pub type FileEntry {
   FileEntry(
     file_dir: String,
     file_name: String,
-    hash: String,
+    file_mod_time: tempo.DateTime,
+    hash: option.Option(String),
     status: FileStatus,
     entry_mod_time: tempo.DateTime,
   )
@@ -38,7 +39,8 @@ pub type FileCacheRequest {
     reply: process.Subject(Result(Nil, snag.Snag)),
     file_dir: String,
     file_name: String,
-    hash: String,
+    file_mod_time: tempo.DateTime,
+    hash: option.Option(String),
   )
   MarkFileAsStale(
     reply: process.Subject(Result(Nil, snag.Snag)),
@@ -74,8 +76,8 @@ pub type FileCacheRequest {
     reply: process.Subject(Result(option.Option(FileEntry), snag.Snag)),
     file_dir: String,
     file_name: String,
-    hash: String,
   )
+  CheckHashExists(reply: process.Subject(Result(Bool, snag.Snag)), hash: String)
   ResetProcessingFiles(reply: process.Subject(Result(Nil, snag.Snag)))
 }
 
@@ -90,22 +92,25 @@ pub fn start(at backup_location) {
 
 fn handle_msg(msg, conn) {
   case msg {
-    AddNewFile(reply, file_dir, file_name, hash) ->
-      process.send(reply, do_add_new_file(conn, file_dir, file_name, hash))
+    AddNewFile(reply, file_dir:, file_name:, file_mod_time:, hash:) ->
+      process.send(
+        reply,
+        do_add_new_file(conn, file_dir, file_name, file_mod_time, hash),
+      )
 
-    MarkFileAsStale(reply, file_dir, file_name) ->
+    MarkFileAsStale(reply, file_dir:, file_name:) ->
       process.send(reply, do_mark_file_as_stale(conn, file_dir, file_name))
 
-    MarkFileAsDeleted(reply, file_dir, file_name) ->
+    MarkFileAsDeleted(reply, file_dir:, file_name:) ->
       process.send(reply, do_mark_file_as_deleted(conn, file_dir, file_name))
 
-    MarkFileAsProcessing(reply, file_dir, file_name) ->
+    MarkFileAsProcessing(reply, file_dir:, file_name:) ->
       process.send(reply, do_mark_file_as_processing(conn, file_dir, file_name))
 
-    MarkFileAsFailed(reply, file_dir, file_name) ->
+    MarkFileAsFailed(reply, file_dir:, file_name:) ->
       process.send(reply, do_mark_file_as_failed(conn, file_dir, file_name))
 
-    MarkFileAsBackedUp(reply, file_dir, file_name) ->
+    MarkFileAsBackedUp(reply, file_dir:, file_name:) ->
       process.send(reply, do_mark_file_as_backed_up(conn, file_dir, file_name))
 
     GetNonStaleFiles(reply) -> process.send(reply, do_get_non_stale_files(conn))
@@ -115,8 +120,11 @@ fn handle_msg(msg, conn) {
     GetFilesNeedingBackup(reply) ->
       process.send(reply, do_get_files_needing_backup(conn))
 
-    GetFileEntry(reply, file_dir, file_name, hash) ->
-      process.send(reply, do_get_file_entry(conn, file_dir, file_name, hash))
+    GetFileEntry(reply, file_dir:, file_name:) ->
+      process.send(reply, do_get_file_entry(conn, file_dir, file_name))
+
+    CheckHashExists(reply, hash) ->
+      process.send(reply, do_check_file_is_backed_up(conn, hash))
 
     ResetProcessingFiles(reply) ->
       process.send(reply, do_reset_processing_files(conn))
@@ -125,15 +133,18 @@ fn handle_msg(msg, conn) {
   actor.continue(conn)
 }
 
-pub fn add_new_file(conn, file_dir, file_name, hash) {
+pub fn add_new_file(conn, file_dir, file_name, file_mod_time, hash) {
   let reply = process.new_subject()
-  actor.send(conn, AddNewFile(reply, file_dir, file_name, hash))
+  actor.send(
+    conn,
+    AddNewFile(reply:, file_dir:, file_name:, file_mod_time:, hash:),
+  )
   process.receive(reply, within: db_timeout)
   |> snagx.from_error("Add new file operation timed out")
   |> result.flatten
 }
 
-fn do_add_new_file(conn, file_dir, file_name, hash) {
+fn do_add_new_file(conn, file_dir, file_name, file_mod_time, hash) {
   sqlight.exec(
     "INSERT INTO files ("
       <> files_sql_columns
@@ -141,7 +152,11 @@ fn do_add_new_file(conn, file_dir, file_name, hash) {
       <> [
       "'" <> file_dir <> "'",
       "'" <> file_name <> "'",
-      "'" <> hash <> "'",
+      "'" <> datetime.to_string(file_mod_time) <> "'",
+      case hash {
+        Some(hash) -> "'" <> hash <> "'"
+        None -> "NULL"
+      },
       "'NEW'",
       "'" <> datetime.now_local() |> datetime.to_string <> "'",
     ]
@@ -355,15 +370,15 @@ fn do_get_stale_files(conn) {
   |> snagx.from_error("Failed to get stale files from file cache db")
 }
 
-pub fn get_file_entry(conn, file_dir, file_name, hash) {
+pub fn get_file_entry(conn, file_dir, file_name) {
   let reply = process.new_subject()
-  actor.send(conn, GetFileEntry(reply, file_dir, file_name, hash))
+  actor.send(conn, GetFileEntry(reply, file_dir, file_name))
   process.receive(reply, within: db_timeout)
   |> snagx.from_error("Get file entry operation timed out")
   |> result.flatten
 }
 
-fn do_get_file_entry(conn, file_dir, file_name, hash) {
+fn do_get_file_entry(conn, file_dir, file_name) {
   use res <- result.map(
     sqlight.query(
       "SELECT "
@@ -372,8 +387,6 @@ fn do_get_file_entry(conn, file_dir, file_name, hash) {
         <> file_dir
         <> "' AND file_name = '"
         <> file_name
-        <> "' AND hash = '"
-        <> hash
         <> "'",
       on: conn,
       with: [],
@@ -387,9 +400,38 @@ fn do_get_file_entry(conn, file_dir, file_name, hash) {
     ),
   )
 
-  list.first(res)
+  list.sort(res, fn(a, b) {
+    datetime.compare(b.entry_mod_time, a.entry_mod_time)
+  })
+  |> list.first
   |> result.map(Some)
   |> result.unwrap(None)
+}
+
+pub fn check_file_is_backed_up(conn, hash) {
+  let reply = process.new_subject()
+  actor.send(conn, CheckHashExists(reply, hash))
+  process.receive(reply, within: db_timeout)
+  |> snagx.from_error("Check hash exists operation timed out")
+  |> result.flatten
+}
+
+fn do_check_file_is_backed_up(conn, hash) {
+  sqlight.query(
+    "SELECT COUNT(*) FROM files WHERE status = 'BACKED_UP' AND hash = '"
+      <> hash
+      <> "'",
+    on: conn,
+    with: [],
+    expecting: fn(dy) {
+      use count <- result.map(dynamic.int(dy))
+      count > 0
+    },
+  )
+  |> snagx.from_error("Failed to check hash exists in file cache db")
+  |> result.try(fn(count) {
+    list.first(count) |> snagx.from_error("Unable to get hash count from db")
+  })
 }
 
 pub fn reset_processing_files(conn) {
@@ -421,27 +463,36 @@ fn string_to_file_status(status: String) -> Result(FileStatus, Nil) {
 }
 
 fn file_entry_decoder(dy) {
-  dynamic.decode5(
+  dynamic.decode6(
     FileEntry,
     dynamic.element(0, dynamic.string),
     dynamic.element(1, dynamic.string),
-    dynamic.element(2, dynamic.string),
-    dynamic.element(3, fn(dy) {
+    dynamic.element(2, datetime.from_dynamic_string),
+    dynamic.element(3, dynamic.optional(dynamic.string)),
+    dynamic.element(4, fn(dy) {
       use str <- result.try(dynamic.string(dy))
       string_to_file_status(str)
       |> result.replace_error([dynamic.DecodeError("status", str, ["2"])])
     }),
-    dynamic.element(4, datetime.from_dynamic_string),
+    dynamic.element(5, datetime.from_dynamic_string),
   )(dy)
 }
 
-const files_sql_columns = "file_dir, file_name, hash, status, entry_mod_time"
+const files_sql_columns = "
+file_dir, 
+file_name, 
+file_mod_time, 
+hash, 
+status, 
+entry_mod_time
+"
 
 const create_files_table_stmt = "
 CREATE TABLE IF NOT EXISTS files (
   file_dir TEXT NOT NULL,
   file_name TEXT NOT NULL,
-  hash TEXT NOT NULL,
+  file_mod_time TEXT NOT NULL,
+  hash TEXT,
   status TEXT NOT NULL,
   entry_mod_time TEXT NOT NULL,
   PRIMARY KEY (file_dir, file_name, hash)
@@ -451,7 +502,8 @@ const create_deleted_files_table_stmt = "
 CREATE TABLE IF NOT EXISTS deleted_files (
   file_dir TEXT NOT NULL,
   file_name TEXT NOT NULL,
-  hash TEXT NOT NULL,
+  file_mod_time TEXT NOT NULL,
+  hash TEXT,
   status TEXT NOT NULL,
   entry_mod_time TEXT NOT NULL
 )

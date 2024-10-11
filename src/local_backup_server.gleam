@@ -5,12 +5,8 @@ import ext/snagx
 import filespy
 import gleam/erlang/process
 import gleam/io
-import gleam/list
 import gleam/result
-import gleam/string
-import glenvy/dotenv
 import glenvy/env
-import simplifile
 import snag
 
 pub fn main() {
@@ -24,54 +20,14 @@ pub fn main() {
 }
 
 fn run() {
-  use Nil <- result.try(
-    dotenv.load() |> snagx.from_error("Failed to load .env"),
-  )
+  use env <- result.try(local_server.init_env())
 
-  use backup_directories <- result.try({
-    use dirs <- result.map(
-      env.get_string("INPUT_FILE_LOCATIONS")
-      |> snagx.from_error("Failed to get INPUT_FILE_LOCATIONS env var"),
-    )
-    string.split(dirs, ",")
-  })
-
-  use backup_base_path <- result.try(
-    env.get_string("BACKUP_LOCATION")
-    |> snagx.from_error("Failed to get BACKUP_LOCATION env var"),
-  )
-
-  use backup_mod_every_mins <- result.try(
-    env.get_int("BACKUP_MODIFIED_FILES_EVERY_MINS")
-    |> snagx.from_error(
-      "Failed to get BACKUP_MODIFIED_FILES_EVERY_MINS env var",
-    ),
-  )
-
-  use _ <- result.try(
-    list.map(backup_directories, fn(dir) {
-      case simplifile.is_directory(dir) {
-        Ok(True) -> {
-          io.println("Backing up directory " <> dir)
-          Ok(Nil)
-        }
-        _ ->
-          snag.error(
-            "Input directory "
-            <> dir
-            <> " does not exist! These files can not be backed up, please set "
-            <> "the INPUT_FILE_LOCATIONS env var to a comma separated list of "
-            <> "valid directories to backup.",
-          )
-      }
-    })
-    |> result.all,
-  )
-
-  use file_cache_conn <- result.try(
-    file_cache.start(at: backup_base_path)
-    |> snagx.from_error("Failed to start file cache"),
-  )
+  let #(
+    backup_directories,
+    backup_base_path,
+    backup_mod_every_mins,
+    file_cache_conn,
+  ) = env
 
   use Nil <- result.try(file_cache.reset_processing_files(file_cache_conn))
 
