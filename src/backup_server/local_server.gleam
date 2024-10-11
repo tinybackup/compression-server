@@ -76,6 +76,9 @@ pub fn reconcile_dir_with_db(directory_path, conn) {
     list.map(file_paths, fn(path) {
       use hash <- result.map(hash_file(from_path: path))
 
+      // TODO do not hash the file right away, instead check mod times and
+      // if there is no update, then we don't need to hash it
+
       #(filepath.directory_name(path), filepath.base_name(path), hash)
     })
     |> result.partition
@@ -130,6 +133,10 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
       filespy.Change(path:, events:) -> {
         list.map(events, fn(event) {
           case event {
+            // TODO make all file system events go through this process so they
+            // can't get too spammy. If a file is created then immediately
+            // deleted, the actor should cancel those events out before they
+            // get written to the db
             filespy.Created -> {
               io.println("Got created event for path " <> path)
               let file_dir = filepath.directory_name(path)
@@ -140,6 +147,8 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
               file_cache.add_new_file(state.conn, file_dir, file_name, hash)
             }
 
+            // TODO make all file system events go through the file mod 
+            // watcher actor so they can't get too spammy
             filespy.Renamed -> {
               io.println("Got Renamed event for path " <> path)
               let file_dir = filepath.directory_name(path)
@@ -156,6 +165,8 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
               Ok(Nil)
             }
 
+            // TODO make all file system events go through this process so they
+            // can't get too spammy
             filespy.Deleted -> {
               io.println("Got deleted event for path " <> path)
               let file_dir = filepath.directory_name(path)
@@ -286,19 +297,19 @@ pub fn run_backup(
 
   let #(_, processing_errors) =
     list.map(files_needing_backup, fn(file_needing_backup) {
-      use _ <- result.try_recover({
+      let file_path =
+        filepath.join(
+          file_needing_backup.file_dir,
+          file_needing_backup.file_name,
+        )
+
+      use processing_error <- result.try_recover({
         // Mark the file as processing
-        use _ <- result.try(file_cache.mark_file_as_processing(
+        use Nil <- result.try(file_cache.mark_file_as_processing(
           file_cache_conn,
           file_needing_backup.file_dir,
           file_needing_backup.file_name,
         ))
-
-        let file_path =
-          filepath.join(
-            file_needing_backup.file_dir,
-            file_needing_backup.file_name,
-          )
 
         use file <- result.try(
           simplifile.read_bits(file_path)
@@ -358,6 +369,10 @@ pub fn run_backup(
           file_needing_backup.file_name,
         )
       })
+
+      processing_error
+      |> snag.layer("Error processing file needing backup " <> file_path)
+      |> log_error
 
       // If this failed, then mark the file as failed
       file_cache.mark_file_as_failed(

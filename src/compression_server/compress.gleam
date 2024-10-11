@@ -10,7 +10,6 @@ import compression_server/types as core_types
 import gleam/list
 import gleam/option
 import gleam/result
-import snag
 import tempo
 
 pub fn image(
@@ -23,52 +22,49 @@ pub fn image(
   user_metadata user_metadata: String,
   faces faces: List(fixed_bounding_box.FixedBoundingBox),
 ) {
-  {
-    let baseline_scale = downsize.calculate_scale(image, config.baseline_size)
+  let baseline_scale = downsize.calculate_scale(image, config.baseline_size)
 
-    use baseline_image <- result.try(downsize.image_by(
-      image,
-      scale: baseline_scale,
-    ))
+  use baseline_image <- result.try(downsize.image_by(
+    image,
+    scale: baseline_scale,
+  ))
 
-    let faces =
-      list.map(faces, fixed_bounding_box.resize_by(_, scale: baseline_scale))
+  let faces =
+    list.map(faces, fixed_bounding_box.resize_by(_, scale: baseline_scale))
 
-    use face_areas <- result.try(extract_faces.from_image(baseline_image, faces))
+  use face_areas <- result.try(extract_faces.from_image(baseline_image, faces))
 
-    use focus_point_areas <- result.try(extract_focus.from_image(
-      baseline_image,
-      config.focus_percent,
-    ))
+  use focus_point_areas <- result.try(extract_focus.from_image(
+    baseline_image,
+    config.focus_percent,
+  ))
 
-    use detail_areas <- result.try(extract_detail.from_image(baseline_image))
+  use detail_areas <- result.try(extract_detail.from_image(baseline_image))
 
-    let metadata_chunk =
-      form_metadata.for_image(
-        config.baseline_size,
-        face_areas |> list.map(fn(area) { area.bounding_box }),
-        focus_point_areas |> list.map(fn(area) { area.bounding_box }),
-        detail_areas |> list.map(fn(area) { area.bounding_box }),
-        naive_datetime,
-        offset,
-        original_file_path,
-        is_favorite,
-        user_metadata,
-      )
-
-    use tiny_image <- result.map(downsize.image_to(
-      baseline_image,
-      size: config.target_size,
-    ))
-
-    embed.into_image(
-      tiny_image,
-      face_areas,
-      focus_point_areas,
-      detail_areas,
-      metadata_chunk,
-      config,
+  let metadata_chunk =
+    form_metadata.for_image(
+      config.baseline_size,
+      face_areas |> list.map(fn(area) { area.bounding_box }),
+      focus_point_areas |> list.map(fn(area) { area.bounding_box }),
+      detail_areas |> list.map(fn(area) { area.bounding_box }),
+      naive_datetime,
+      offset,
+      original_file_path,
+      is_favorite,
+      user_metadata,
     )
-  }
-  |> snag.context("Failed to compress image")
+
+  use tiny_image <- result.map(downsize.image_to(
+    baseline_image,
+    size: config.target_size,
+  ))
+
+  embed.into_image(
+    tiny_image,
+    face_areas,
+    focus_point_areas,
+    detail_areas,
+    metadata_chunk,
+    config,
+  )
 }

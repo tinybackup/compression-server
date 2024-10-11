@@ -70,7 +70,10 @@ pub fn detect_faces(in image: BitArray) {
       <> " and a body of: \""
       <> {
         bit_array.to_string(resp.body)
-        |> result.lazy_unwrap(fn() { string.inspect(resp.body) })
+        |> result.map(string.replace(_, "\n", ""))
+        |> result.lazy_unwrap(fn() {
+          string.inspect(resp.body) |> string.replace("\n", "")
+        })
       }
       <> "\"",
     ),
