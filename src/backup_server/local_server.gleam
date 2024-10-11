@@ -604,7 +604,7 @@ pub fn run_cleanup(
 
   let #(_, processing_errors) =
     list.filter(stale_files, fn(stale_file) {
-      stale_file.entry_mod_time
+      stale_file.entry_time
       |> datetime.is_earlier(
         than: datetime.now_local()
         |> datetime.subtract(delete_when_older_than),

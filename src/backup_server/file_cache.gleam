@@ -1,5 +1,6 @@
 import ext/snagx
 import filepath
+import gleam/bool
 import gleam/dynamic
 import gleam/erlang/process
 import gleam/io
@@ -21,7 +22,7 @@ pub type FileEntry {
     file_mod_time: tempo.DateTime,
     hash: option.Option(String),
     status: FileStatus,
-    entry_mod_time: tempo.DateTime,
+    entry_time: tempo.DateTime,
   )
 }
 
@@ -95,23 +96,26 @@ fn handle_msg(msg, conn) {
     AddNewFile(reply, file_dir:, file_name:, file_mod_time:, hash:) ->
       process.send(
         reply,
-        do_add_new_file(conn, file_dir, file_name, file_mod_time, hash),
+        do_add_new_record(conn, file_dir, file_name, file_mod_time, hash, New),
       )
 
     MarkFileAsStale(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as_stale(conn, file_dir, file_name))
+      process.send(reply, do_mark_file_as(conn, file_dir, file_name, Stale))
 
     MarkFileAsDeleted(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as_deleted(conn, file_dir, file_name))
+      process.send(reply, do_mark_file_as(conn, file_dir, file_name, Deleted))
 
     MarkFileAsProcessing(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as_processing(conn, file_dir, file_name))
+      process.send(
+        reply,
+        do_mark_file_as(conn, file_dir, file_name, Processing),
+      )
 
     MarkFileAsFailed(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as_failed(conn, file_dir, file_name))
+      process.send(reply, do_mark_file_as(conn, file_dir, file_name, Failed))
 
     MarkFileAsBackedUp(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as_backed_up(conn, file_dir, file_name))
+      process.send(reply, do_mark_file_as(conn, file_dir, file_name, BackedUp))
 
     GetNonStaleFiles(reply) -> process.send(reply, do_get_non_stale_files(conn))
 
@@ -144,7 +148,7 @@ pub fn add_new_file(conn, file_dir, file_name, file_mod_time, hash) {
   |> result.flatten
 }
 
-fn do_add_new_file(conn, file_dir, file_name, file_mod_time, hash) {
+fn do_add_new_record(conn, file_dir, file_name, file_mod_time, hash, status) {
   sqlight.exec(
     "INSERT INTO files ("
       <> files_sql_columns
@@ -157,7 +161,7 @@ fn do_add_new_file(conn, file_dir, file_name, file_mod_time, hash) {
         Some(hash) -> "'" <> hash <> "'"
         None -> "NULL"
       },
-      "'NEW'",
+      "'" <> status_to_string(status) <> "'",
       "'" <> datetime.now_local() |> datetime.to_string <> "'",
     ]
     |> string.join(",")
@@ -165,7 +169,9 @@ fn do_add_new_file(conn, file_dir, file_name, file_mod_time, hash) {
     on: conn,
   )
   |> snagx.from_error(
-    "Unable to insert new file into file cache db "
+    "Unable to insert new "
+    <> status_to_string(status)
+    <> " file into file cache db "
     <> file_dir
     <> "/"
     <> file_name,
@@ -180,60 +186,12 @@ pub fn mark_file_as_stale(conn, file_dir, file_name) {
   |> result.flatten
 }
 
-fn do_mark_file_as_stale(conn, file_dir, file_name) {
-  sqlight.exec(
-    "UPDATE files SET status = 'STALE', entry_mod_time = '"
-      <> datetime.now_local() |> datetime.to_string
-      <> "' WHERE file_dir = '"
-      <> file_dir
-      <> "' AND file_name = '"
-      <> file_name
-      <> "'",
-    on: conn,
-  )
-  |> snagx.from_error(
-    "Failed to mark file as stale in file cache db "
-    <> file_dir
-    <> "/"
-    <> file_name,
-  )
-}
-
 pub fn mark_file_as_deleted(conn, file_dir, file_name) {
   let reply = process.new_subject()
   actor.send(conn, MarkFileAsDeleted(reply, file_dir, file_name))
   process.receive(reply, within: db_timeout)
   |> snagx.from_error("Mark file as deleted operation timed out")
   |> result.flatten
-}
-
-fn do_mark_file_as_deleted(conn, file_dir, file_name) {
-  use _ <- result.try(
-    sqlight.exec("INSERT INTO deleted_files
-      SELECT * FROM files WHERE file_dir = '" <> file_dir <> "' AND file_name = '" <> file_name <> "'
-    ", on: conn)
-    |> snagx.from_error(
-      "Failed to insert deleted files into deleted_files table for "
-      <> file_dir
-      <> "/"
-      <> file_name,
-    ),
-  )
-
-  sqlight.exec(
-    "DELETE FROM files WHERE file_dir = '"
-      <> file_dir
-      <> "' AND file_name = '"
-      <> file_name
-      <> "'",
-    on: conn,
-  )
-  |> snagx.from_error(
-    "Failed to delete deleted files in cache db "
-    <> file_dir
-    <> "/"
-    <> file_name,
-  )
 }
 
 pub fn mark_file_as_processing(conn, file_dir, file_name) {
@@ -244,45 +202,12 @@ pub fn mark_file_as_processing(conn, file_dir, file_name) {
   |> result.flatten
 }
 
-fn do_mark_file_as_processing(conn, file_dir, file_name) {
-  sqlight.exec(
-    "UPDATE files SET status = 'PROCESSING', entry_mod_time = '"
-      <> datetime.now_local() |> datetime.to_string
-      <> "' WHERE file_dir = '"
-      <> file_dir
-      <> "' AND file_name = '"
-      <> file_name
-      <> "' AND status = 'NEW'",
-    on: conn,
-  )
-  |> snagx.from_error(
-    "Failed to mark file as processing in file cache db "
-    <> file_dir
-    <> "/"
-    <> file_name,
-  )
-}
-
 pub fn mark_file_as_failed(conn, file_dir, file_name) {
   let reply = process.new_subject()
   actor.send(conn, MarkFileAsFailed(reply, file_dir, file_name))
   process.receive(reply, within: db_timeout)
   |> snagx.from_error("Mark file as failed operation timed out")
   |> result.flatten
-}
-
-fn do_mark_file_as_failed(conn, file_dir, file_name) {
-  sqlight.exec(
-    "UPDATE files SET status = 'FAILED', entry_mod_time = '"
-      <> datetime.now_local() |> datetime.to_string
-      <> "' WHERE file_dir = '"
-      <> file_dir
-      <> "' AND file_name = '"
-      <> file_name
-      <> "' AND status = 'PROCESSING'",
-    on: conn,
-  )
-  |> snagx.from_error("Failed to mark file as failed in file cache db")
 }
 
 pub fn mark_file_as_backed_up(conn, file_dir, file_name) {
@@ -293,23 +218,42 @@ pub fn mark_file_as_backed_up(conn, file_dir, file_name) {
   |> result.flatten
 }
 
-fn do_mark_file_as_backed_up(conn, file_dir, file_name) {
-  sqlight.exec(
-    "UPDATE files SET status = 'BACKED_UP', entry_mod_time = '"
-      <> datetime.now_local() |> datetime.to_string
-      <> "' WHERE file_dir = '"
+fn do_mark_file_as(conn, file_dir, file_name, status) {
+  use entry <- result.try(do_get_file_entry(conn, file_dir, file_name))
+  use <- bool.guard(
+    when: entry == None,
+    return: snag.error(
+      "Could not find file entry to mark as "
+      <> status_to_string(status)
+      <> " from "
       <> file_dir
-      <> "' AND file_name = '"
-      <> file_name
-      <> "' AND status = 'PROCESSING'",
-    on: conn,
+      <> "/"
+      <> file_name,
+    ),
   )
-  |> snagx.from_error(
-    "Failed to mark file as backed up in file cache db "
+  let assert Some(entry) = entry
+
+  use error <- result.try_recover({
+    do_add_new_record(
+      conn,
+      entry.file_dir,
+      entry.file_name,
+      entry.file_mod_time,
+      entry.hash,
+      status,
+    )
+  })
+
+  error
+  |> snag.layer(
+    "Failed to add new "
+    <> status_to_string(status)
+    <> " record to the file cache db "
     <> file_dir
     <> "/"
     <> file_name,
   )
+  |> Error
 }
 
 pub fn get_files_needing_backup(conn) {
@@ -321,17 +265,13 @@ pub fn get_files_needing_backup(conn) {
 }
 
 fn do_get_files_needing_backup(conn) {
-  sqlight.query(
-    "SELECT "
-      <> files_sql_columns
-      <> " FROM files WHERE status = 'NEW' OR status = 'FAILED'",
-    on: conn,
-    with: [],
-    expecting: file_entry_decoder,
+  use entries <- result.map(
+    get_file_entries(conn) |> snag.context("Failed to non stale file entries"),
   )
-  |> snagx.from_error(
-    "Failed to get files needing to be backed up from file cache db",
-  )
+
+  list.filter(entries, fn(entry) {
+    entry.status == New || entry.status == Failed
+  })
 }
 
 pub fn get_non_stale_files(conn) {
@@ -343,13 +283,11 @@ pub fn get_non_stale_files(conn) {
 }
 
 fn do_get_non_stale_files(conn) {
-  sqlight.query(
-    "SELECT " <> files_sql_columns <> " FROM files WHERE status != 'STALE'",
-    on: conn,
-    with: [],
-    expecting: file_entry_decoder,
+  use entries <- result.map(
+    get_file_entries(conn) |> snag.context("Failed to non stale file entries"),
   )
-  |> snagx.from_error("Failed to get non stale files from file cache db")
+
+  list.filter(entries, fn(entry) { entry.status != Stale })
 }
 
 pub fn get_stale_files(conn) {
@@ -361,13 +299,26 @@ pub fn get_stale_files(conn) {
 }
 
 fn do_get_stale_files(conn) {
-  sqlight.query(
-    "SELECT " <> files_sql_columns <> " FROM files WHERE status = 'STALE'",
-    on: conn,
-    with: [],
-    expecting: file_entry_decoder,
+  use entries <- result.map(
+    get_file_entries(conn) |> snag.context("Failed to non stale file entries"),
   )
-  |> snagx.from_error("Failed to get stale files from file cache db")
+
+  list.filter(entries, fn(entry) { entry.status == Stale })
+}
+
+fn get_file_entries(conn) {
+  sqlight.query("
+      SELECT " <> files_sql_columns_complex <> "
+      FROM files f
+      JOIN (
+        SELECT " <> files_sql_columns <> ", MAX(rowid) as max_rowid
+        FROM files
+        GROUP BY file_dir, file_name
+      ) m ON f.rowid = m.max_rowid 
+        AND f.file_dir = m.file_dir 
+        AND f.file_name = m.file_name
+    ", on: conn, with: [], expecting: file_entry_decoder)
+  |> snagx.from_error("Failed to get file entries from file cache db")
 }
 
 pub fn get_file_entry(conn, file_dir, file_name) {
@@ -400,9 +351,7 @@ fn do_get_file_entry(conn, file_dir, file_name) {
     ),
   )
 
-  list.sort(res, fn(a, b) {
-    datetime.compare(b.entry_mod_time, a.entry_mod_time)
-  })
+  list.sort(res, fn(a, b) { datetime.compare(b.entry_time, a.entry_time) })
   |> list.first
   |> result.map(Some)
   |> result.unwrap(None)
@@ -443,10 +392,21 @@ pub fn reset_processing_files(conn) {
 }
 
 fn do_reset_processing_files(conn) {
-  sqlight.exec(
-    "UPDATE files SET status = 'NEW' WHERE status = 'PROCESSING'",
-    on: conn,
-  )
+  sqlight.exec("INSERT INTO files (
+      file_dir, 
+      file_name, 
+      file_mod_time, 
+      hash, 
+      status, 
+      entry_time
+    ) SELECT 
+      file_dir, 
+      file_name, 
+      file_mod_time, 
+      hash, 
+      'NEW', 
+      '" <> datetime.now_local() |> datetime.to_string <> "'
+    FROM files WHERE status = 'PROCESSING'", on: conn)
   |> snagx.from_error("Failed to reset processing files in file cache db")
 }
 
@@ -459,6 +419,17 @@ fn string_to_file_status(status: String) -> Result(FileStatus, Nil) {
     "STALE" -> Ok(Stale)
     "DELETED" -> Ok(Deleted)
     _ -> Error(Nil)
+  }
+}
+
+fn status_to_string(status) {
+  case status {
+    New -> "NEW"
+    Processing -> "PROCESSING"
+    Failed -> "FAILED"
+    BackedUp -> "BACKED_UP"
+    Stale -> "STALE"
+    Deleted -> "DELETED"
   }
 }
 
@@ -484,7 +455,16 @@ file_name,
 file_mod_time, 
 hash, 
 status, 
-entry_mod_time
+entry_time
+"
+
+const files_sql_columns_complex = "
+f.file_dir, 
+f.file_name, 
+f.file_mod_time, 
+f.hash, 
+f.status, 
+f.entry_time
 "
 
 const create_files_table_stmt = "
@@ -494,20 +474,8 @@ CREATE TABLE IF NOT EXISTS files (
   file_mod_time TEXT NOT NULL,
   hash TEXT,
   status TEXT NOT NULL,
-  entry_mod_time TEXT NOT NULL,
-  PRIMARY KEY (file_dir, file_name, hash)
+  entry_time TEXT NOT NULL
 )"
-
-const create_deleted_files_table_stmt = "
-CREATE TABLE IF NOT EXISTS deleted_files (
-  file_dir TEXT NOT NULL,
-  file_name TEXT NOT NULL,
-  file_mod_time TEXT NOT NULL,
-  hash TEXT,
-  status TEXT NOT NULL,
-  entry_mod_time TEXT NOT NULL
-)
-"
 
 fn connect_to_files_db(path) {
   case simplifile.is_directory(path) {
@@ -523,7 +491,7 @@ fn connect_to_files_db(path) {
   )
 
   let _ = sqlight.exec(create_files_table_stmt, on: conn)
-  let _ = sqlight.exec(create_deleted_files_table_stmt, on: conn)
+
   conn
 }
 
@@ -535,10 +503,7 @@ pub fn start_test() {
 }
 
 fn connect_to_test_files_db() {
-  let files_db_path = "data/files_test.db"
-  let _ =
-    simplifile.create_directory_all(filepath.directory_name(files_db_path))
-
+  let files_db_path = "test/data/files_test.db"
   use conn <- result.map(
     sqlight.open("file:" <> files_db_path)
     |> snagx.from_error("Failed to connect to file cache db " <> files_db_path),
@@ -550,7 +515,7 @@ fn connect_to_test_files_db() {
 }
 
 pub fn wipe_test_db() {
-  let files_db_path = "data/files_test.db"
+  let files_db_path = "test/data/files_test.db"
   let _ =
     simplifile.create_directory_all(filepath.directory_name(files_db_path))
 
