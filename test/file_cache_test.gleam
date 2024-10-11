@@ -178,6 +178,25 @@ pub fn reset_processing_files_test() {
   file_cache.mark_file_as_processing(conn, "test/input", "photo.jpg")
   |> should.equal(Ok(Nil))
 
+  file_cache.add_new_file(
+    conn,
+    "test/input",
+    "photo2.jpg",
+    datetime.literal("2024-10-09T15:38:55Z"),
+  )
+  |> should.equal(Ok(Nil))
+
+  file_cache.mark_file_as_processing(conn, "test/input", "photo2.jpg")
+  |> should.equal(Ok(Nil))
+
+  file_cache.mark_file_as_backed_up(
+    conn,
+    "test/input",
+    "photo2.jpg",
+    "1fd7c564",
+  )
+  |> should.equal(Ok(Nil))
+
   let assert Ok(processing_files) = file_cache.get_files_needing_backup(conn)
 
   processing_files
