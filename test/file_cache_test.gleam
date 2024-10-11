@@ -182,3 +182,27 @@ pub fn reset_processing_files_test() {
     #("test/input", "photo.jpg", Some("1fd7c5a4"), file_cache.New),
   ])
 }
+
+pub fn check_file_is_backed_up_test() {
+  file_cache.wipe_test_db()
+
+  let assert Ok(conn) = file_cache.start_test()
+
+  file_cache.add_new_file(
+    conn,
+    "test/input",
+    "photo.jpg",
+    datetime.literal("2024-10-10T15:38:55Z"),
+    Some("1fd7c564"),
+  )
+  |> should.equal(Ok(Nil))
+
+  file_cache.check_file_is_backed_up(conn, "1fd7c564")
+  |> should.equal(Ok(False))
+
+  file_cache.mark_file_as_backed_up(conn, "test/input", "photo.jpg", "1fd7c564")
+  |> should.equal(Ok(Nil))
+
+  file_cache.check_file_is_backed_up(conn, "1fd7c564")
+  |> should.equal(Ok(True))
+}

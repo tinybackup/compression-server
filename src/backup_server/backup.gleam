@@ -204,7 +204,12 @@ pub fn backup_file(
       ),
     )
 
-    file_cache.mark_file_as_backed_up(file_cache_conn, file_dir, file_name)
+    file_cache.mark_file_as_backed_up(
+      file_cache_conn,
+      file_dir,
+      file_name,
+      hash,
+    )
   })
 
   processing_error

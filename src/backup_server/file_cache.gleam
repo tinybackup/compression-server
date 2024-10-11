@@ -67,6 +67,7 @@ pub type FileCacheRequest {
     reply: process.Subject(Result(Nil, snag.Snag)),
     file_dir: String,
     file_name: String,
+    hash: String,
   )
   GetNonStaleFiles(reply: process.Subject(Result(List(FileEntry), snag.Snag)))
   GetStaleFiles(reply: process.Subject(Result(List(FileEntry), snag.Snag)))
@@ -100,22 +101,34 @@ fn handle_msg(msg, conn) {
       )
 
     MarkFileAsStale(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as(conn, file_dir, file_name, Stale))
+      process.send(
+        reply,
+        do_mark_file_as(conn, file_dir, file_name, None, Stale),
+      )
 
     MarkFileAsDeleted(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as(conn, file_dir, file_name, Deleted))
+      process.send(
+        reply,
+        do_mark_file_as(conn, file_dir, file_name, None, Deleted),
+      )
 
     MarkFileAsProcessing(reply, file_dir:, file_name:) ->
       process.send(
         reply,
-        do_mark_file_as(conn, file_dir, file_name, Processing),
+        do_mark_file_as(conn, file_dir, file_name, None, Processing),
       )
 
     MarkFileAsFailed(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as(conn, file_dir, file_name, Failed))
+      process.send(
+        reply,
+        do_mark_file_as(conn, file_dir, file_name, None, Failed),
+      )
 
-    MarkFileAsBackedUp(reply, file_dir:, file_name:) ->
-      process.send(reply, do_mark_file_as(conn, file_dir, file_name, BackedUp))
+    MarkFileAsBackedUp(reply, file_dir:, file_name:, hash:) ->
+      process.send(
+        reply,
+        do_mark_file_as(conn, file_dir, file_name, Some(hash), BackedUp),
+      )
 
     GetNonStaleFiles(reply) -> process.send(reply, do_get_non_stale_files(conn))
 
@@ -210,15 +223,15 @@ pub fn mark_file_as_failed(conn, file_dir, file_name) {
   |> result.flatten
 }
 
-pub fn mark_file_as_backed_up(conn, file_dir, file_name) {
+pub fn mark_file_as_backed_up(conn, file_dir, file_name, hash) {
   let reply = process.new_subject()
-  actor.send(conn, MarkFileAsBackedUp(reply, file_dir, file_name))
+  actor.send(conn, MarkFileAsBackedUp(reply, file_dir, file_name, hash))
   process.receive(reply, within: db_timeout)
   |> snagx.from_error("Mark file as backed up operation timed out")
   |> result.flatten
 }
 
-fn do_mark_file_as(conn, file_dir, file_name, status) {
+fn do_mark_file_as(conn, file_dir, file_name, hash, status) {
   use entry <- result.try(do_get_file_entry(conn, file_dir, file_name))
   use <- bool.guard(
     when: entry == None,
@@ -239,7 +252,10 @@ fn do_mark_file_as(conn, file_dir, file_name, status) {
       entry.file_dir,
       entry.file_name,
       entry.file_mod_time,
-      entry.hash,
+      case hash {
+        Some(_) -> hash
+        None -> entry.hash
+      },
       status,
     )
   })
@@ -373,7 +389,7 @@ fn do_check_file_is_backed_up(conn, hash) {
     on: conn,
     with: [],
     expecting: fn(dy) {
-      use count <- result.map(dynamic.int(dy))
+      use count <- result.map(dynamic.element(0, dynamic.int)(dy))
       count > 0
     },
   )
