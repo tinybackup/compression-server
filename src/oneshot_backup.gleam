@@ -1,4 +1,5 @@
 import backup_server/backup
+import backup_server/file_cache
 import gleam/io
 import gleam/list
 import gleam/result
@@ -33,11 +34,18 @@ pub fn run() {
   let new_files = list.flatten(new_files)
 
   list.map(new_files, fn(new_file) {
-    let #(file_dir, file_name, _) = new_file
+    let #(file_dir, file_name, file_mod_time) = new_file
 
     io.print("Backing up file " <> file_dir <> "/" <> file_name <> " ... ")
 
-    case
+    let backup_res = {
+      use Nil <- result.try(file_cache.add_new_file(
+        file_cache_conn,
+        file_dir,
+        file_name,
+        file_mod_time,
+      ))
+
       backup.backup_file(
         file_cache_conn,
         backup_base_path,
@@ -45,7 +53,9 @@ pub fn run() {
         file_dir,
         file_name,
       )
-    {
+    }
+
+    case backup_res {
       Ok(Nil) -> io.println("Done")
       Error(e) ->
         snag.layer(e, "Failed to backup file, ")

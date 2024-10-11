@@ -4,18 +4,18 @@ import compression_server/types
 import ext/snagx
 import filepath
 import filespy
-import gleam/erlang/process
-import gleam/io
-import gleam/result
-import snag
 import gleam/bool
+import gleam/erlang/process
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/otp/actor
+import gleam/result
 import gleam/set
 import repeatedly
 import simplifile
+import snag
 import tempo
 import tempo/datetime
 import tempo/duration
@@ -129,7 +129,7 @@ pub fn reconcile_dir_with_db(directory_path, conn) {
 
       // Once the stale files are marked, then add this new one at the path
       // with the new status.
-      file_cache.add_new_file(conn, file_dir, file_name, mod_time, None)
+      file_cache.add_new_file(conn, file_dir, file_name, mod_time)
     })
     |> result.all
     |> snag.context("Failed to add new files to db"),
@@ -158,13 +158,7 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
                 from_path: path,
               ))
 
-              file_cache.add_new_file(
-                state.conn,
-                file_dir,
-                file_name,
-                mod_time,
-                None,
-              )
+              file_cache.add_new_file(state.conn, file_dir, file_name, mod_time)
             }
 
             // TODO make all file system events go through the file mod 
@@ -178,13 +172,7 @@ pub fn handle_fs_event(change: filespy.Change(a), state: WatcherActorState) {
                 from_path: path,
               ))
 
-              file_cache.add_new_file(
-                state.conn,
-                file_dir,
-                file_name,
-                mod_time,
-                None,
-              )
+              file_cache.add_new_file(state.conn, file_dir, file_name, mod_time)
             }
 
             // Backing up based on mod events are delayed based on an interval
@@ -253,13 +241,7 @@ fn handle_mod_event(msg, state: FileModWatcherActorState) {
             file_name,
           ))
 
-          file_cache.add_new_file(
-            state.conn,
-            file_dir,
-            file_name,
-            mod_time,
-            None,
-          )
+          file_cache.add_new_file(state.conn, file_dir, file_name, mod_time)
         })
         |> result.partition
 

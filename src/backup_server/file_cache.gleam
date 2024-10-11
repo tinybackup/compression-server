@@ -41,7 +41,6 @@ pub type FileCacheRequest {
     file_dir: String,
     file_name: String,
     file_mod_time: tempo.DateTime,
-    hash: option.Option(String),
   )
   MarkFileAsStale(
     reply: process.Subject(Result(Nil, snag.Snag)),
@@ -94,10 +93,10 @@ pub fn start(at backup_location) {
 
 fn handle_msg(msg, conn) {
   case msg {
-    AddNewFile(reply, file_dir:, file_name:, file_mod_time:, hash:) ->
+    AddNewFile(reply, file_dir:, file_name:, file_mod_time:) ->
       process.send(
         reply,
-        do_add_new_record(conn, file_dir, file_name, file_mod_time, hash, New),
+        do_add_new_record(conn, file_dir, file_name, file_mod_time, None, New),
       )
 
     MarkFileAsStale(reply, file_dir:, file_name:) ->
@@ -150,12 +149,9 @@ fn handle_msg(msg, conn) {
   actor.continue(conn)
 }
 
-pub fn add_new_file(conn, file_dir, file_name, file_mod_time, hash) {
+pub fn add_new_file(conn, file_dir, file_name, file_mod_time) {
   let reply = process.new_subject()
-  actor.send(
-    conn,
-    AddNewFile(reply:, file_dir:, file_name:, file_mod_time:, hash:),
-  )
+  actor.send(conn, AddNewFile(reply:, file_dir:, file_name:, file_mod_time:))
   process.receive(reply, within: db_timeout)
   |> snagx.from_error("Add new file operation timed out")
   |> result.flatten

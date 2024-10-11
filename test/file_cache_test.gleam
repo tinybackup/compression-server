@@ -19,7 +19,6 @@ pub fn add_new_file_test() {
     "test/input",
     "photo.jpg",
     datetime.literal("2024-10-09T15:38:55Z"),
-    Some("1fd7c5a4"),
   )
   |> should.equal(Ok(Nil))
 
@@ -27,7 +26,7 @@ pub fn add_new_file_test() {
     file_cache.get_file_entry(conn, "test/input", "photo.jpg")
 
   #(dir, name, hash, status)
-  |> should.equal(#("test/input", "photo.jpg", Some("1fd7c5a4"), file_cache.New))
+  |> should.equal(#("test/input", "photo.jpg", None, file_cache.New))
 }
 
 pub fn stale_files_test() {
@@ -39,7 +38,6 @@ pub fn stale_files_test() {
     "test/input",
     "photo2.jpg",
     datetime.literal("2024-10-09T15:38:55Z"),
-    Some("1fd7ca4"),
   )
   |> should.equal(Ok(Nil))
 
@@ -48,7 +46,6 @@ pub fn stale_files_test() {
     "test/input",
     "photo.jpg",
     datetime.literal("2024-10-09T15:38:55Z"),
-    Some("1fd7c5a4"),
   )
   |> should.equal(Ok(Nil))
 
@@ -59,17 +56,13 @@ pub fn stale_files_test() {
 
   stales
   |> list.map(fn(f) { #(f.file_dir, f.file_name, f.hash, f.status) })
-  |> should.equal([
-    #("test/input", "photo.jpg", Some("1fd7c5a4"), file_cache.Stale),
-  ])
+  |> should.equal([#("test/input", "photo.jpg", None, file_cache.Stale)])
 
   let assert Ok(stales) = file_cache.get_non_stale_files(conn)
 
   stales
   |> list.map(fn(f) { #(f.file_dir, f.file_name, f.hash, f.status) })
-  |> should.equal([
-    #("test/input", "photo2.jpg", Some("1fd7ca4"), file_cache.New),
-  ])
+  |> should.equal([#("test/input", "photo2.jpg", None, file_cache.New)])
 }
 
 pub fn get_files_needing_backup_test() {
@@ -87,7 +80,6 @@ pub fn get_files_needing_backup_test() {
     "test/input",
     "photo.jpg",
     datetime.literal("2024-10-09T15:38:55Z"),
-    Some("1fd7c5a4"),
   )
   |> should.equal(Ok(Nil))
 
@@ -99,8 +91,18 @@ pub fn get_files_needing_backup_test() {
     "test/input",
     "photo2.jpg",
     datetime.literal("2024-10-09T15:38:55Z"),
-    Some("1fd7c5a3"),
   )
+  |> should.equal(Ok(Nil))
+
+  file_cache.add_new_file(
+    conn,
+    "test/input",
+    "photo3.jpg",
+    datetime.literal("2024-10-09T15:38:55Z"),
+  )
+  |> should.equal(Ok(Nil))
+
+  file_cache.mark_file_as_failed(conn, "test/input", "photo3.jpg")
   |> should.equal(Ok(Nil))
 
   let assert Ok(files) = file_cache.get_files_needing_backup(conn)
@@ -113,7 +115,8 @@ pub fn get_files_needing_backup_test() {
 
   files
   |> should.equal([
-    #("test/input", "photo2.jpg", Some("1fd7c5a3"), file_cache.New),
+    #("test/input", "photo2.jpg", None, file_cache.New),
+    #("test/input", "photo3.jpg", None, file_cache.Failed),
   ])
 }
 
@@ -127,7 +130,6 @@ pub fn get_file_entry_test() {
     "test/input",
     "photo.jpg",
     datetime.literal("2024-10-09T15:38:55Z"),
-    None,
   )
   |> should.equal(Ok(Nil))
 
@@ -139,15 +141,26 @@ pub fn get_file_entry_test() {
     "test/input",
     "photo.jpg",
     datetime.literal("2024-10-10T15:38:55Z"),
-    Some("1fd7c564"),
   )
   |> should.equal(Ok(Nil))
 
-  let assert Ok(option.Some(file_cache.FileEntry(dir, name, _, hash, status, _))) =
-    file_cache.get_file_entry(conn, "test/input", "photo.jpg")
+  let assert Ok(option.Some(file_cache.FileEntry(
+    dir,
+    name,
+    mod_time,
+    hash,
+    status,
+    _,
+  ))) = file_cache.get_file_entry(conn, "test/input", "photo.jpg")
 
-  #(dir, name, hash, status)
-  |> should.equal(#("test/input", "photo.jpg", Some("1fd7c564"), file_cache.New))
+  #(dir, name, mod_time, hash, status)
+  |> should.equal(#(
+    "test/input",
+    "photo.jpg",
+    datetime.literal("2024-10-10T15:38:55Z"),
+    None,
+    file_cache.New,
+  ))
 }
 
 pub fn reset_processing_files_test() {
@@ -159,7 +172,6 @@ pub fn reset_processing_files_test() {
     "test/input",
     "photo.jpg",
     datetime.literal("2024-10-09T15:38:55Z"),
-    Some("1fd7c5a4"),
   )
   |> should.equal(Ok(Nil))
 
@@ -178,9 +190,7 @@ pub fn reset_processing_files_test() {
 
   processing_files
   |> list.map(fn(f) { #(f.file_dir, f.file_name, f.hash, f.status) })
-  |> should.equal([
-    #("test/input", "photo.jpg", Some("1fd7c5a4"), file_cache.New),
-  ])
+  |> should.equal([#("test/input", "photo.jpg", None, file_cache.New)])
 }
 
 pub fn check_file_is_backed_up_test() {
@@ -193,7 +203,6 @@ pub fn check_file_is_backed_up_test() {
     "test/input",
     "photo.jpg",
     datetime.literal("2024-10-10T15:38:55Z"),
-    Some("1fd7c564"),
   )
   |> should.equal(Ok(Nil))
 
