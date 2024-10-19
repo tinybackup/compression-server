@@ -85,8 +85,10 @@ pub fn run() {
 
     case backup_res {
       Ok(Nil) -> io.println("Done")
+      // This is never being hit bc the error is captured and logged in the 
+      // backup_file body
       Error(e) ->
-        snag.layer(e, "Failed to backup file, ")
+        snag.layer(e, "Failed to backup file \n")
         |> snag.line_print
         |> io.println
     }

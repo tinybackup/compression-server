@@ -1,9 +1,7 @@
-import ansel
 import ansel/image
 import backup_server/file_cache
 import compression_server/compress
 import compression_server/lib/detect_faces
-import compression_server/lib/downsize
 import compression_server/types
 import ext/snagx
 import filepath
@@ -177,13 +175,8 @@ pub fn backup_file(
 
     let config = types.get_image_config(backup_target_size, is_favorite:)
 
-    use compatable_image_file <- result.try(
-      downsize.image_to(image, config.baseline_size)
-      |> result.map(image.to_bit_array(_, ansel.HEIC(
-        quality: 75,
-        keep_metadata: False,
-      ))),
-    )
+    let compatable_image_file =
+      image.to_bit_array(image, image.JPEG(quality: 75, keep_metadata: False))
 
     use faces <- result.try(detect_faces.detect_faces(in: compatable_image_file))
 
@@ -278,9 +271,7 @@ pub fn determine_date(for file_bits, at path) {
 
   // If there is no exif data, then try to get the date from the file path
   use _ <- result.try_recover({
-    use #(date, time, offset) <- result.try(
-      tempo.parse_any(path) |> result.nil_error,
-    )
+    let #(date, time, offset) = tempo.parse_any(path)
 
     case date, time {
       Some(date), Some(time) -> Ok(#(naive_datetime.new(date, time), offset))

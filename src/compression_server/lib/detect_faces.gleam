@@ -1,4 +1,4 @@
-import ansel/fixed_bounding_box
+import ansel/bounding_box
 import ext/snagx
 import gleam/bit_array
 import gleam/dynamic
@@ -81,7 +81,7 @@ pub fn detect_faces(in image: BitArray) {
 
   list.map(res.face_bounds, fn(bounds) {
     case bounds.ltwh |> string.split(",") |> list.map(int.parse) {
-      [Ok(l), Ok(t), Ok(w), Ok(h)] -> fixed_bounding_box.ltwh(l, t, w, h)
+      [Ok(l), Ok(t), Ok(w), Ok(h)] -> bounding_box.ltwh(l, t, w, h)
 
       _ ->
         snag.error(

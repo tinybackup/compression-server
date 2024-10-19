@@ -2,7 +2,7 @@
 # You typically do not need to edit this file
 
 packages = [
-  { name = "ansel", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "snag", "vix"], source = "local", path = "../ansel" },
+  { name = "ansel", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "snag", "vix"], otp_app = "ansel", source = "hex", outer_checksum = "C73129C75A840CA773B0728C9D92DD4449AE9FB0778316F010AE182162A7F50F" },
   { name = "benchee", version = "1.3.1", build_tools = ["mix"], requirements = ["deep_merge", "statistex", "table"], otp_app = "benchee", source = "hex", outer_checksum = "76224C58EA1D0391C8309A8ECBFE27D71062878F59BD41A390266BF4AC1CC56D" },
   { name = "castore", version = "1.0.9", build_tools = ["mix"], requirements = [], otp_app = "castore", source = "hex", outer_checksum = "5EA956504F1BA6F2B4EB707061D8E17870DE2BEE95FB59D512872C2EF06925E7" },
   { name = "cc_precompiler", version = "0.1.10", build_tools = ["mix"], requirements = ["elixir_make"], otp_app = "cc_precompiler", source = "hex", outer_checksum = "F6E046254E53CD6B41C6BACD70AE728011AA82B2742A80D6E2214855C6E06B22" },
@@ -25,12 +25,12 @@ packages = [
   { name = "glenvy", version = "1.0.1", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_stdlib", "nibble", "simplifile"], otp_app = "glenvy", source = "hex", outer_checksum = "0F95149BF3052724BC2C76DF0235ED12C681683936294C84E2FB7853254FFB00" },
   { name = "glychee", version = "1.1.2", build_tools = ["gleam"], requirements = ["benchee"], otp_app = "glychee", source = "hex", outer_checksum = "41784216C213F223095BB3FC3EDDB60CC537835B2340A868EA3931193F7F3824" },
   { name = "gsiphash", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gsiphash", source = "hex", outer_checksum = "329B284FAA3022889FFF8E69E9B508F42374A177EEA9F5E61A77538AFE00394A" },
-  { name = "gtempo", version = "4.2.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gtempo", source = "hex", outer_checksum = "1BE67D05220ECAC8FF919928C63D4130490F1DE968F2D5A4F8A8B3E6747670F5" },
+  { name = "gtempo", version = "5.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gtempo", source = "hex", outer_checksum = "572CA0C26DE00253A3F5D0297B2B0931C03C66592CF0F29E2BFB35D8981AE921" },
   { name = "kino", version = "0.14.1", build_tools = ["mix"], requirements = ["fss", "nx", "plug", "table"], otp_app = "kino", source = "hex", outer_checksum = "090AEA1AAA267E42E5AC24EE6BC5ED515AECC0A9EDB8619AA4EE839201E704AA" },
   { name = "mime", version = "2.0.6", build_tools = ["mix"], requirements = [], otp_app = "mime", source = "hex", outer_checksum = "C9945363A6B26D747389AAC3643F8E0E09D30499A138AD64FE8FD1D13D9B153E" },
   { name = "nextexif", version = "0.1.2", build_tools = ["mix"], requirements = [], otp_app = "nextexif", source = "hex", outer_checksum = "CE9A73D82BF61CEEB9DBB2014DF2291E04DEB3C3C2463E4F4C260875C43E2735" },
   { name = "nibble", version = "1.1.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "nibble", source = "hex", outer_checksum = "67C6BEBC1AB6D771AB893B4A7B3E66C92668C6E7774C335FEFCD545B06435FE5" },
-  { name = "nx", version = "0.9.0", build_tools = ["mix"], requirements = ["complex", "telemetry"], otp_app = "nx", source = "hex", outer_checksum = "3810A5A90DB0654B6E538430C0FB473A22BFC11B3D02EA7834DB493CF3F56153" },
+  { name = "nx", version = "0.9.1", build_tools = ["mix"], requirements = ["complex", "telemetry"], otp_app = "nx", source = "hex", outer_checksum = "F67CA8FCF09F73000E9A59A19F93AD8E0E581F4993E008527A4A6F280C71C467" },
   { name = "plug", version = "1.16.1", build_tools = ["mix"], requirements = ["mime", "plug_crypto", "telemetry"], otp_app = "plug", source = "hex", outer_checksum = "A13FF6B9006B03D7E33874945B2755253841B238C34071ED85B0E86057F8CDDC" },
   { name = "plug_crypto", version = "2.1.0", build_tools = ["mix"], requirements = [], otp_app = "plug_crypto", source = "hex", outer_checksum = "131216A4B030B8F8CE0F26038BC4421AE60E4BB95C5CF5395E1421437824C4FA" },
   { name = "repeatedly", version = "2.1.1", build_tools = ["gleam"], requirements = [], otp_app = "repeatedly", source = "hex", outer_checksum = "38808C3EC382B0CD981336D5879C24ECB37FCB9C1D1BD128F7A80B0F74404D79" },
@@ -44,7 +44,7 @@ packages = [
 ]
 
 [requirements]
-ansel = { path = "../ansel" }
+ansel = { version = ">= 1.0.0 and < 2.0.0" }
 filepath = { version = ">= 1.0.0 and < 2.0.0" }
 filespy = { version = ">= 0.5.0 and < 1.0.0" }
 gleam_erlang = { version = ">= 0.27.0 and < 1.0.0" }
@@ -57,7 +57,7 @@ gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 glenvy = { version = ">= 1.0.1 and < 2.0.0" }
 glychee = { version = ">= 1.1.2 and < 2.0.0" }
 gsiphash = { version = ">= 1.0.0 and < 2.0.0" }
-gtempo = { version = ">= 4.2.0 and < 5.0.0" }
+gtempo = { version = ">= 5.0.0 and < 6.0.0" }
 nextexif = { version = ">= 0.1.2 and < 1.0.0" }
 repeatedly = { version = ">= 2.1.1 and < 3.0.0" }
 simplifile = { version = ">= 2.2.0 and < 3.0.0" }

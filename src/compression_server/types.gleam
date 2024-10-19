@@ -1,5 +1,5 @@
 import ansel
-import ansel/fixed_bounding_box
+import ansel/bounding_box
 import ansel/image
 import gleam/option
 import tempo
@@ -59,26 +59,26 @@ pub fn get_image_config(
         write_baseline: fn(image) {
           image.to_bit_array(
             image,
-            ansel.AVIF(quality: 30, keep_metadata: False),
+            image.AVIF(quality: 30, keep_metadata: False),
           )
         },
         write_face: fn(image) {
           image.to_bit_array(
             image,
-            ansel.AVIF(quality: 40, keep_metadata: False),
+            image.AVIF(quality: 40, keep_metadata: False),
           )
         },
         focus_percent: 0.45,
         write_focus_point: fn(image) {
           image.to_bit_array(
             image,
-            ansel.AVIF(quality: 30, keep_metadata: False),
+            image.AVIF(quality: 30, keep_metadata: False),
           )
         },
         write_detail: fn(image) {
           image.to_bit_array(
             image,
-            ansel.AVIF(quality: 40, keep_metadata: False),
+            image.AVIF(quality: 40, keep_metadata: False),
           )
         },
         compatability_mode: False,
@@ -91,26 +91,26 @@ pub fn get_image_config(
         write_baseline: fn(image) {
           image.to_bit_array(
             image,
-            ansel.JPEG(quality: 30, keep_metadata: False),
+            image.JPEG(quality: 30, keep_metadata: False),
           )
         },
         write_face: fn(image) {
           image.to_bit_array(
             image,
-            ansel.JPEG(quality: 40, keep_metadata: False),
+            image.JPEG(quality: 40, keep_metadata: False),
           )
         },
         focus_percent: 0.45,
         write_focus_point: fn(image) {
           image.to_bit_array(
             image,
-            ansel.JPEG(quality: 30, keep_metadata: False),
+            image.JPEG(quality: 30, keep_metadata: False),
           )
         },
         write_detail: fn(image) {
           image.to_bit_array(
             image,
-            ansel.JPEG(quality: 50, keep_metadata: False),
+            image.JPEG(quality: 50, keep_metadata: False),
           )
         },
         compatability_mode: True,
@@ -150,14 +150,11 @@ pub type CompressionRequest {
     target_size: TargetSize,
     original_file_path: String,
     user_metadata: String,
-    faces: List(fixed_bounding_box.FixedBoundingBox),
+    faces: List(bounding_box.BoundingBox),
   )
   Video
 }
 
 pub type ExtractedArea {
-  ExtractedArea(
-    area: ansel.Image,
-    bounding_box: fixed_bounding_box.FixedBoundingBox,
-  )
+  ExtractedArea(area: ansel.Image, bounding_box: bounding_box.BoundingBox)
 }

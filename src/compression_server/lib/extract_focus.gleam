@@ -1,5 +1,5 @@
 import ansel
-import ansel/fixed_bounding_box
+import ansel/bounding_box
 import ansel/image
 import compression_server/types as core_types
 import gleam/float
@@ -52,7 +52,7 @@ pub fn from_image(image: ansel.Image, focus_percent: Float) {
   let vertical_crop_height = float.truncate(vertical_crop_height)
 
   use horizontal_crop <- result.try(
-    fixed_bounding_box.ltwh(
+    bounding_box.ltwh(
       left: { image_width - horizontal_crop_width } / 2,
       top: { image_height - horizontal_crop_hight } / 2,
       width: horizontal_crop_width,
@@ -61,7 +61,7 @@ pub fn from_image(image: ansel.Image, focus_percent: Float) {
     |> result.replace_error(snag.new("Failed to create horizontal bounding box")),
   )
   use vertical_crop <- result.try(
-    fixed_bounding_box.ltwh(
+    bounding_box.ltwh(
       left: { image_width - vertical_crop_width } / 2,
       top: { image_height - vertical_crop_height } / 2,
       width: vertical_crop_width,
@@ -73,11 +73,11 @@ pub fn from_image(image: ansel.Image, focus_percent: Float) {
   let focus_point_bounding_boxes = case image_width > image_height {
     True -> [
       vertical_crop,
-      ..fixed_bounding_box.cut(out_of: horizontal_crop, with: vertical_crop)
+      ..bounding_box.cut(out_of: horizontal_crop, with: vertical_crop)
     ]
     False -> [
       horizontal_crop,
-      ..fixed_bounding_box.cut(out_of: vertical_crop, with: horizontal_crop)
+      ..bounding_box.cut(out_of: vertical_crop, with: horizontal_crop)
     ]
   }
 

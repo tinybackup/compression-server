@@ -3,7 +3,7 @@
 //// Things like the texture of a shirt or pattern in the background.
 
 import ansel
-import ansel/fixed_bounding_box
+import ansel/bounding_box
 import ansel/image
 import compression_server/types as core_types
 import gleam/int
@@ -22,7 +22,7 @@ pub fn from_image(image: ansel.Image) {
   let smallest_dimension = int.min(width, height)
 
   let get_bounding_box = fn(center_x, center_y) {
-    fixed_bounding_box.ltrb(
+    bounding_box.ltrb(
       left: center_x - detail_crop_half_size,
       top: center_y - detail_crop_half_size,
       right: center_x + detail_crop_half_size,

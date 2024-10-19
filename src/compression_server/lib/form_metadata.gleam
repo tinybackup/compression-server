@@ -1,4 +1,4 @@
-import ansel/fixed_bounding_box
+import ansel/bounding_box
 import compression_server/types as core_types
 import gleam/bit_array
 import gleam/bool
@@ -38,9 +38,9 @@ pub const footer_size_marker_size = 5
 
 pub fn for_image(
   baseline_size: Int,
-  face_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
-  focus_point_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
-  detail_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
+  face_bounding_boxes: List(bounding_box.BoundingBox),
+  focus_point_bounding_boxes: List(bounding_box.BoundingBox),
+  detail_bounding_boxes: List(bounding_box.BoundingBox),
   datetime: tempo.NaiveDateTime,
   datetime_offset: option.Option(tempo.Offset),
   original_file_path: String,
@@ -74,7 +74,7 @@ pub fn for_image(
   |> bytes_builder.append_string("\"")
   |> bytes_builder.append_builder(
     list.map(face_bounding_boxes, fn(bounding_box) {
-      let #(x, y, w, h) = fixed_bounding_box.to_ltwh_tuple(bounding_box)
+      let #(x, y, w, h) = bounding_box.to_ltwh_tuple(bounding_box)
 
       bytes_builder.from_string(face_marker)
       |> bytes_builder.append_string(x |> int.to_string)
@@ -89,7 +89,7 @@ pub fn for_image(
   )
   |> bytes_builder.append_builder(
     list.map(focus_point_bounding_boxes, fn(bounding_box) {
-      let #(x, y, w, h) = fixed_bounding_box.to_ltwh_tuple(bounding_box)
+      let #(x, y, w, h) = bounding_box.to_ltwh_tuple(bounding_box)
 
       bytes_builder.from_string(focus_point_marker)
       |> bytes_builder.append_string(x |> int.to_string)
@@ -104,7 +104,7 @@ pub fn for_image(
   )
   |> bytes_builder.append_builder(
     list.map(detail_bounding_boxes, fn(bounding_box) {
-      let #(x, y, w, h) = fixed_bounding_box.to_ltwh_tuple(bounding_box)
+      let #(x, y, w, h) = bounding_box.to_ltwh_tuple(bounding_box)
 
       bytes_builder.from_string(detail_marker)
       |> bytes_builder.append_string(x |> int.to_string)
@@ -122,9 +122,9 @@ pub fn for_image(
 pub type ImageMetadata {
   ImageMetadata(
     baseline_size: Int,
-    face_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
-    focus_point_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
-    detail_bounding_boxes: List(fixed_bounding_box.FixedBoundingBox),
+    face_bounding_boxes: List(bounding_box.BoundingBox),
+    focus_point_bounding_boxes: List(bounding_box.BoundingBox),
+    detail_bounding_boxes: List(bounding_box.BoundingBox),
     datetime: tempo.NaiveDateTime,
     datetime_offset: option.Option(tempo.Offset),
     original_file_path: String,
@@ -281,7 +281,7 @@ pub fn parse_image_metadata(image_metadata_chunk: BitArray) {
 
 fn bounding_box_parser(bb_str) {
   case bb_str |> string.split(",") |> list.map(int.parse) |> result.all {
-    Ok([x, y, w, h]) -> fixed_bounding_box.ltwh(x, y, w, h) |> result.nil_error
+    Ok([x, y, w, h]) -> bounding_box.ltwh(x, y, w, h) |> result.nil_error
     Ok(_) -> Error(Nil)
     Error(_) -> Error(Nil)
   }

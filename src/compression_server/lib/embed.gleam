@@ -1,6 +1,6 @@
 import ansel
+import ansel/bounding_box
 import ansel/color
-import ansel/fixed_bounding_box
 import ansel/image
 import compression_server/lib/form_metadata
 import compression_server/types as core_types
@@ -9,6 +9,7 @@ import gleam/bytes_builder
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/result
 import gleam/string
 
 pub fn into_image(
@@ -108,13 +109,13 @@ fn backfill_tiny_image(tiny_image, areas, tiny_image_scale) {
   let width = image.get_width(tiny_image)
   let height = image.get_height(tiny_image)
 
-  case fixed_bounding_box.ltwh(0, 0, width, height) {
+  case bounding_box.ltwh(0, 0, width, height) {
     Ok(base) ->
       areas
-      |> list.map(fixed_bounding_box.resize_by(_, scale: tiny_image_scale))
-      |> list.map(fixed_bounding_box.shrink(_, by: 5))
-      |> option.values
-      |> list.map(fixed_bounding_box.intersection(base, _))
+      |> list.map(bounding_box.scale(_, by: tiny_image_scale))
+      |> list.map(bounding_box.shrink(_, by: 5))
+      |> result.values
+      |> list.map(bounding_box.intersection(base, _))
       |> option.values
       |> list.fold(from: tiny_image, with: fn(image, area) {
         case image.fill(image, in: area, with: color.Grey) {
@@ -133,12 +134,11 @@ fn backfill_extracted_areas(
   let extracted_bb = extracted_area.bounding_box
 
   greater_extracted_bb
-  |> list.map(fixed_bounding_box.shrink(_, by: 5))
+  |> list.map(bounding_box.shrink(_, by: 5))
+  |> result.values
+  |> list.map(bounding_box.intersection(extracted_bb, _))
   |> option.values
-  |> list.map(fixed_bounding_box.intersection(extracted_bb, _))
-  |> option.values
-  |> list.map(fixed_bounding_box.make_relative_to(_, extracted_bb))
-  |> list.map(fixed_bounding_box.fit(_, into: extracted_bb))
+  |> list.map(bounding_box.make_relative(_, to: extracted_bb))
   |> option.values
   |> list.fold(from: extracted_area.area, with: fn(extracted_image, int) {
     // If the area to fill takes up a total part of the image so that there

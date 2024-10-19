@@ -1,5 +1,5 @@
 import ansel
-import ansel/fixed_bounding_box
+import ansel/bounding_box
 import compression_server/lib/downsize
 import compression_server/lib/embed
 import compression_server/lib/extract_detail
@@ -20,7 +20,7 @@ pub fn image(
   original_file_path original_file_path: String,
   is_favorite is_favorite: Bool,
   user_metadata user_metadata: String,
-  faces faces: List(fixed_bounding_box.FixedBoundingBox),
+  faces faces: List(bounding_box.BoundingBox),
 ) {
   let baseline_scale = downsize.calculate_scale(image, config.baseline_size)
 
@@ -29,8 +29,7 @@ pub fn image(
     scale: baseline_scale,
   ))
 
-  let faces =
-    list.map(faces, fixed_bounding_box.resize_by(_, scale: baseline_scale))
+  let faces = list.map(faces, bounding_box.scale(_, by: baseline_scale))
 
   use face_areas <- result.try(extract_faces.from_image(baseline_image, faces))
 

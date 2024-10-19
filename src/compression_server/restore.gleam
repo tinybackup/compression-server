@@ -1,4 +1,4 @@
-import ansel/fixed_bounding_box
+import ansel/bounding_box
 import ansel/image
 import compression_server/lib/downsize
 import compression_server/lib/form_metadata
@@ -188,7 +188,7 @@ fn apply(image, extractions extractions, at bbs) {
     case res {
       Ok(restored) -> {
         let #(face, bb) = face_bb
-        let #(x, y, _, _) = fixed_bounding_box.to_ltwh_tuple(bb)
+        let #(x, y, _, _) = bounding_box.to_ltwh_tuple(bb)
 
         image.composite_over(restored, face, at_left: x, at_top: y)
       }

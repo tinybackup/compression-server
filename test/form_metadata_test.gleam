@@ -1,4 +1,4 @@
-import ansel/fixed_bounding_box
+import ansel/bounding_box
 import compression_server/lib/form_metadata
 import gleam/option.{None, Some}
 import gleeunit
@@ -11,7 +11,7 @@ pub fn main() {
 }
 
 fn assert_ltwh(x, y, w, h) {
-  let assert Ok(bb) = fixed_bounding_box.ltwh(x, y, w, h)
+  let assert Ok(bb) = bounding_box.ltwh(x, y, w, h)
   bb
 }
 
